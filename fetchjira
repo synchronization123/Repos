@@ -1,0 +1,202 @@
+import os
+import requests
+import pandas as pd
+import tkinter as tk
+from tkinter import ttk
+from io import StringIO
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill, Font, Alignment
+import tempfile
+
+# Function to download usernames
+def download_usernames(progress_var):
+    console.delete("1.0", tk.END)  # Clear previous logs
+    progress_var.set(10)
+    root.update_idletasks()
+    
+    url = "https://demo.defectdojo.org/api/v2/users/?offset=0&limit=100"
+    headers = {'Authorization': 'Token 548afd6fab3bea9794a41b31da0e9404f733e222'}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        usernames = [(user['id'], user['username']) for user in data['results']]
+        df = pd.DataFrame(usernames, columns=['ID', 'Username'])
+        df.to_excel("usernames.xlsx", index=False)
+        
+        console.insert(tk.END, "✅ Usernames downloaded successfully.\n")
+    
+    except requests.RequestException as e:
+        console.insert(tk.END, f"❌ Error fetching usernames: {e}\n")
+    
+    progress_var.set(30)
+    root.update_idletasks()
+
+# Function to fetch JIRA data
+def fetch_jira_data(progress_var, jql_query, keyword=None, labels=None):
+    url = f"https://jira.demo.almworks.com/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery={jql_query}"
+    headers = {'Authorization': 'Token NTM3NTY0MzMxODk0OurYbbL9KNeFJBlrUsktvjLicd2W'}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            console.insert(tk.END, f"❌ JIRA API request failed. Status: {response.status_code}\n")
+            return
+        
+        csv_data = response.text
+        if not csv_data.strip():  # If no data is returned
+            console.insert(tk.END, "❌ No data found for the JQL query.\n")
+            return
+        
+        df = pd.read_csv(StringIO(csv_data))
+        
+        # Extract relevant columns
+        comment_cols = [col for col in df.columns if "Comment" in col]
+        label_cols = [col for col in df.columns if "Labels" in col]
+
+        # Merge all label columns into one, removing duplicates
+        df['Labels'] = df[label_cols].apply(lambda row: ', '.join(sorted(set(row.dropna().astype(str)))), axis=1)
+
+        # Add Category column based on Labels content
+        df['Category'] = df['Labels'].apply(lambda x: 'Security Jira' if 'Security' in x or 'AppSecurity' in x else 'Functional Jira')
+
+        # Keep only relevant columns
+        df = df[["Issue key", "Summary", "Labels", "Category"] + comment_cols]
+
+        # If a keyword is provided, filter comments containing the keyword (case-insensitive)
+        if keyword:
+            keyword_lower = keyword.lower()  # Make keyword lowercase for case-insensitive comparison
+            df = df[df[comment_cols].apply(lambda row: any(keyword_lower in str(cell).lower() for cell in row), axis=1)]
+
+        # If labels are provided, filter by the labels
+        if labels:
+            df = df[df['Labels'].str.contains(labels, case=False, na=False)]  # Case-insensitive match for labels
+
+        # Save to files
+        df.to_csv("jiradata.csv", index=False)
+        df.to_excel("jiradata.xlsx", index=False)
+        
+        console.insert(tk.END, "✅ JIRA data fetched successfully.\n")
+    
+    except Exception as e:
+        console.insert(tk.END, f"❌ Error processing JIRA data: {e}\n")
+    
+    progress_var.set(60)
+    root.update_idletasks()
+
+# Function to highlight usernames, reformat comments, and style Issue Key in red
+def highlight_usernames_and_reformat_comments(progress_var):
+    try:
+        usernames_df = pd.read_excel("usernames.xlsx")
+        usernames = set(usernames_df['Username'].astype(str).str.lower())
+        
+        wb = load_workbook("jiradata.xlsx")
+        ws = wb.active
+        
+        yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+        orange_font = Font(color="FFA500")  # Orange color for usernames
+        red_font = Font(color="FF0000")    # Red color for Issue Key
+        wrap_text = Alignment(wrap_text=True)
+        
+        comment_cols = [cell.column_letter for cell in ws[1] if "Comment" in cell.value]
+
+        for row in ws.iter_rows(min_row=2):
+            issue_key_found = False  # To check if any username is found in comments
+            
+            for cell in row:
+                if cell.column_letter in comment_cols and cell.value:
+                    # Split the comment and reformat it
+                    comment_parts = cell.value.split(';')
+                    if len(comment_parts) >= 3:
+                        date_time = comment_parts[0].strip()
+                        username = comment_parts[1].strip()
+                        comment_text = comment_parts[2].strip()
+
+                        # Limit comment to the first 4 lines (if more than 4 lines)
+                        comment_lines = comment_text.splitlines()[:4]
+                        limited_comment = '\n'.join(comment_lines)
+
+                        # Reformat comment
+                        formatted_comment = (
+                            f"Date and Time: {date_time}\n"
+                            f"Comment Added by: {username}\n"
+                            f"Comment: {limited_comment}"
+                        )
+
+                        # Set the formatted comment
+                        cell.value = formatted_comment
+                        cell.alignment = wrap_text
+
+                        # Highlight username in orange
+                        if username.lower() in usernames:
+                            issue_key_found = True  # If the username is found in the comments
+                            cell.font = Font(color="FFA500")  # Orange color
+
+            # Highlight Issue Key in red if no username is found in comments
+            issue_key_cell = row[0]  # Assuming Issue key is in the first column
+            if not issue_key_found:
+                issue_key_cell.font = red_font  # Make Issue Key red
+            
+        # Set fixed row height to 141.75 points (5 cm)
+        for row in ws.iter_rows():
+            ws.row_dimensions[row[0].row].height = 141.75  # 5 cm = 141.75 points
+
+        # Adjust column width
+        for col in ws.columns:
+            ws.column_dimensions[col[0].column_letter].width = 40  
+
+        wb.save("Report.xlsx")
+        console.insert(tk.END, "✅ Report generated successfully with reformatted comments and Issue Key in red.\n")
+    
+    except Exception as e:
+        console.insert(tk.END, f"❌ Error generating report: {e}\n")
+    
+    progress_var.set(100)
+    root.update_idletasks()
+
+# Function to trigger the whole process
+def process_data():
+    progress_var.set(0)
+    root.update_idletasks()
+
+    # Get the JQL entered by the user
+    jql_query = entry_jql.get().strip()
+    
+    # Check if a keyword is entered for comment filtering
+    keyword = entry_keyword.get().strip()
+    if keyword:
+        jql_query += f' AND comment~"{keyword}"'
+    
+    # Check if a label is entered for filtering
+    labels = entry_labels.get().strip()
+    if labels:
+        jql_query += f' AND labels={labels}'
+
+    # If no JQL query is entered, notify the user
+    if not jql_query:
+        console.insert(tk.END, "❌ No JQL conditions entered.\n")
+        return
+    
+    # Trigger the steps to download usernames, fetch JIRA data, and highlight comments
+    download_usernames(progress_var)
+    fetch_jira_data(progress_var, jql_query, keyword, labels)
+    highlight_usernames_and_reformat_comments(progress_var)
+
+# GUI Setup
+root = tk.Tk()
+root.title("JIRA Report Generator")
+
+# Progress bar setup
+progress_var = tk.DoubleVar()
+progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
+progress_bar.grid(row=0, column=0, padx=20, pady=10)
+
+# Input for JQL query
+tk.Label(root, text="Enter JQL Query:").grid(row=1, column=0, padx=20, pady=10)
+entry_jql = tk.Entry(root, width=50)
+entry_jql.grid(row=2, column=0, padx=20, pady=10)
+
+# Input for keyword filter (optional)
+tk.Label(root, text="Enter Keyword for Comments (optional):").grid
