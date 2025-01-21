@@ -1,0 +1,59 @@
+import pandas as pd
+import requests
+import datetime
+import os
+import io
+
+# Constants
+JIRA_URL = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery="
+API_TOKEN = "jdkdjdjjdd"
+USERNAME_FILE = "usernames.xlsx"
+OUTPUT_DIR = r"C:\Users\testser\Desktop\Data"
+TODAY_DATE = datetime.datetime.today().strftime('%Y-%m-%d')
+
+# Ensure output directory exists
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Read usernames from Excel (case-insensitive column check)
+usernames_df = pd.read_excel(USERNAME_FILE, sheet_name=0)
+usernames_column = [col for col in usernames_df.columns if col.lower() == "usernames"]
+if not usernames_column:
+    raise ValueError("Column 'Usernames' not found in usernames.xlsx")
+usernames = usernames_df[usernames_column[0]].dropna().astype(str).str.strip().tolist()
+
+# Convert to lowercase and filter out unwanted usernames
+ignored_users = {"pull-request", "admin"}
+usernames = [u for u in usernames if u.lower() not in ignored_users]
+
+# Define JQL templates
+JQL_QUERIES = {
+    "fs-accepted": " OR ".join([f"status changed from 'Ready for testing' to 'Done' ON {TODAY_DATE} by {u}" for u in usernames]),
+    "ds-accepted": " OR ".join([f"status changed from 'Ready for testing' to 'Ready for PA' ON {TODAY_DATE} by {u}" for u in usernames]),
+}
+
+# Function to fetch Jira data
+def fetch_jira_data(jql):
+    url = f"{JIRA_URL}{jql}"
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return response.content.decode('utf-8')
+    else:
+        print(f"Failed for JQL: {jql} | Status: {response.status_code}")
+        return None
+
+# Process each JQL query and store data in separate CSV files
+for jql_name, jql in JQL_QUERIES.items():
+    csv_data = fetch_jira_data(jql)
+
+    if csv_data and csv_data.strip():  # Check if response is not empty
+        try:
+            df = pd.read_csv(io.StringIO(csv_data))
+            csv_filename = os.path.join(OUTPUT_DIR, f"{jql_name}-{TODAY_DATE}.csv")
+            df.to_csv(csv_filename, index=False)
+            print(f"Saved: {csv_filename}")
+        except pd.errors.EmptyDataError:
+            print(f"Warning: No data found for JQL: {jql_name}")
+    else:
+        print(f"Warning: Jira returned an empty response for JQL: {jql_name}")
