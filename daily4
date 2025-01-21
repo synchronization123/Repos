@@ -1,0 +1,83 @@
+import requests
+import pandas as pd
+from datetime import datetime
+import os
+import logging
+
+# Configurations
+jira_url = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery="
+api_token = "jdkdjdjjdd"
+username_file = "username.xlsx"  # Excel file containing usernames
+data_folder = "C:\\Users\\testser\\Desktop\\Data\\"
+log_folder = "logs\\"
+today_date = datetime.now().strftime("%Y-%m-%d")  # Current date in yyyy-mm-dd format
+
+# Create log folder if it doesn't exist
+if not os.path.exists(log_folder):
+    os.makedirs(log_folder)
+
+# Setup logging
+log_file = f"{log_folder}{today_date}.logs"
+logging.basicConfig(filename=log_file, level=logging.INFO)
+
+# Function to download data from Jira
+def download_jira_data(jql_query, file_name):
+    headers = {
+        'Authorization': f'Bearer {api_token}'
+    }
+    
+    # Jira request URL
+    request_url = f"{jira_url}{jql_query}"
+    
+    try:
+        logging.info(f"Downloading data for JQL: {jql_query}")
+        response = requests.get(request_url, headers=headers)
+        response.raise_for_status()
+        
+        # Save the response as a CSV file
+        file_path = os.path.join(data_folder, file_name)
+        with open(file_path, "wb") as file:
+            file.write(response.content)
+        
+        logging.info(f"Data downloaded and saved as: {file_path}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error downloading data for JQL {jql_query}: {str(e)}")
+
+# Load usernames from the Excel file
+def load_usernames(file):
+    df = pd.read_excel(file)
+    return df['username'].tolist()
+
+# Build the JQL query for a given date and list of usernames
+def build_jql_query(usernames):
+    jql_parts = []
+    for username in usernames:
+        jql_parts.append(f"(status changed from 'Ready for testing' to 'Done' on {today_date} by {username})")
+    
+    # Combine the individual queries with OR
+    jql_query = " OR ".join(jql_parts)
+    return jql_query
+
+# Main function to execute the process
+def main():
+    # Ensure the data folder exists
+    if not os.path.exists(data_folder):
+        os.makedirs(data_folder)
+
+    # Load usernames from the Excel file
+    usernames = load_usernames(username_file)
+    
+    if usernames:
+        # Build the JQL query
+        jql_query = build_jql_query(usernames)
+        
+        # Create a file name based on today's date and the JQL query
+        file_name = f"{today_date}_jqlname.csv"
+        
+        # Download the Jira data and save it to the designated folder
+        download_jira_data(jql_query, file_name)
+    else:
+        logging.warning("No usernames found in the Excel file.")
+
+if __name__ == "__main__":
+    main()
