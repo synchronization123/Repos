@@ -1,0 +1,66 @@
+import os
+import smtplib
+from tkinter import Tk, filedialog, messagebox
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+
+# Function to send email
+def send_email(subject, body):
+    try:
+        # SMTP configuration
+        smtp_host = "email-smtp.india.west.amazonaws.com"
+        smtp_port = 6898
+        smtp_username = "jdjdjjd"
+        smtp_password = "djdjdjdjd"
+        sender_name = "crm"
+        sender_email = "djjddj@def.com"
+
+        # Recipients
+        to_addresses = ["abc@abx.com", "def@abc.com"]
+        cc_addresses = ["xyb@abc.com", "bncjv@abx.com"]
+
+        # Create message container
+        msg = MIMEMultipart()
+        msg['From'] = f"{sender_name} <{sender_email}>"
+        msg['To'] = ", ".join(to_addresses)
+        msg['Cc'] = ", ".join(cc_addresses)
+        msg['Subject'] = subject
+
+        # Add email body with HTML content
+        body_content = f"<p>Task created successfully, please visit.</p>{body}"
+        msg.attach(MIMEText(body_content, 'html'))
+
+        # Connect to the SMTP server and send the email
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            server.sendmail(sender_email, to_addresses + cc_addresses, msg.as_string())
+        
+        # Show success message
+        messagebox.showinfo("Email Sent", f"Email sent with subject: {subject}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to send email: {str(e)}")
+
+# Function to open HTML file and get its content
+def open_html_file():
+    root = Tk()
+    root.withdraw()  # Hide the root window
+
+    # Open file dialog to select HTML file
+    file_path = filedialog.askopenfilename(filetypes=[("HTML Files", "*.html")])
+    
+    if file_path:
+        # Read HTML file content
+        with open(file_path, 'r', encoding='utf-8') as file:
+            html_content = file.read()
+
+        # Extract subject name without .html extension
+        subject = os.path.basename(file_path).replace('.html', '')
+
+        # Call send email function
+        send_email(subject, html_content)
+
+if __name__ == "__main__":
+    # Trigger the file selection and email sending process
+    open_html_file()
