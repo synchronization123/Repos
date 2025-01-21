@@ -1,0 +1,71 @@
+import pandas as pd
+import requests
+import datetime
+import os
+import io
+
+# Constants
+JIRA_URL = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery="
+API_TOKEN = "jdkdjdjjdd"
+USERNAME_FILE = "username.xlsx"
+OUTPUT_DIR = r"C:\Users\testser\Desktop\Data"
+TODAY_DATE = datetime.datetime.today().strftime('%Y-%m-%d')
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, f"date_{TODAY_DATE}.xlsx")
+
+# Ensure output directory exists
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Read usernames from Excel, ignoring "pull-request" and "admin"
+usernames_df = pd.read_excel(USERNAME_FILE, sheet_name=0)
+usernames = [u for u in usernames_df["username"].dropna().tolist() if u.lower() not in ["pull-request", "admin"]]
+
+# Define JQL queries
+JQL_QUERIES = {
+    "FS Accepted": "status changed from 'Ready for testing' to 'Done' during ({date}) by {username}",
+    "DS Accepted": "status changed from 'Ready for testing' to 'Ready for PA' during ({date}) by {username}",
+}
+
+# Function to fetch Jira data
+def fetch_jira_data(jql):
+    url = f"{JIRA_URL}{jql}"
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return response.content.decode('utf-8')
+    else:
+        print(f"Failed for JQL: {jql} | Status: {response.status_code}")
+        return None
+
+# Process each query and store data in an Excel file
+with pd.ExcelWriter(OUTPUT_FILE, engine="openpyxl") as writer:
+    sheets_created = 0  # Track if at least one sheet has data
+    
+    for sheet_name, jql_template in JQL_QUERIES.items():
+        all_data = []
+
+        for username in usernames:
+            jql = jql_template.format(date=TODAY_DATE, username=username)
+            csv_data = fetch_jira_data(jql)
+
+            if csv_data:
+                df = pd.read_csv(io.StringIO(csv_data))
+                all_data.append(df)
+
+        # Merge all results for the sheet
+        if all_data:
+            final_df = pd.concat(all_data, ignore_index=True)
+            final_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            sheets_created += 1
+        else:
+            # If no data, create an empty sheet with headers
+            empty_df = pd.DataFrame(columns=["Issue Key", "Summary", "Security Analyst", "Comments"])
+            empty_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+# Ensure at least one sheet is present
+if sheets_created == 0:
+    with pd.ExcelWriter(OUTPUT_FILE, engine="openpyxl") as writer:
+        empty_df = pd.DataFrame(columns=["Issue Key", "Summary", "Security Analyst", "Comments"])
+        empty_df.to_excel(writer, sheet_name="No Data", index=False)
+
+print(f"Data saved to {OUTPUT_FILE}")
