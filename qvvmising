@@ -1,0 +1,143 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import requests
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Font
+import threading
+import base64
+
+# Jira credentials and API details (update as needed)
+JIRA_URL = "https://your-jira-instance.com/rest/api/2/search"
+USERNAME = "your-email@example.com"
+API_TOKEN = "your-api-token"
+
+# Function to fetch Jira data
+def fetch_jira_data(jql_values, progress_callback):
+    auth = base64.b64encode(f"{USERNAME}:{API_TOKEN}".encode()).decode()
+    headers = {"Authorization": f"Basic {auth}", "Content-Type": "application/json"}
+    
+    jql_query = f'labels in ({jql_values}) OR "Build(s)" in ({jql_values})'
+    params = {
+        "jql": jql_query,
+        "maxResults": 100,
+        "fields": ["summary", "key", "issuetype", "status", "components", "customfield_12345", "resolution", "customfield_67890"]
+    }
+
+    response = requests.get(JIRA_URL, headers=headers, params=params)
+    
+    if response.status_code != 200:
+        return None, f"Error: {response.status_code} - {response.text}"
+
+    data = response.json()
+    issues = data.get("issues", [])
+    processed_data = []
+    total_issues = len(issues)
+
+    for index, issue in enumerate(issues):
+        summary = issue["fields"]["summary"]
+        issue_key = issue["key"]
+        issue_type = issue["fields"]["issuetype"]["name"]
+        status = issue["fields"]["status"]["name"]
+        resolution = issue["fields"].get("resolution", {}).get("name", "Unresolved")
+        invalid_reason = issue["fields"].get("customfield_67890", "")
+
+        # Identify Security vs. Functional Jira
+        components = [comp["name"] for comp in issue["fields"].get("components", [])]
+        is_security = any(c.lower() in ["security", "appsecurity"] for c in components)
+        jira_type = "Security Jira" if is_security else "Functional Jira"
+
+        # Get QA Verified Version (custom field, update field ID as needed)
+        qa_verified = issue["fields"].get("customfield_12345", [])
+        qa_verified_str = ", ".join(qa_verified) if qa_verified else ""
+
+        processed_data.append([summary, issue_key, issue_type, status, jira_type, qa_verified_str, resolution, invalid_reason])
+
+        # Update progress
+        progress_callback(int((index + 1) / total_issues * 100))
+
+    return processed_data, None
+
+# Function to save data to Excel with formatting
+def save_to_excel(data, filename, user_versions):
+    df = pd.DataFrame(data, columns=["Summary", "Issue Key", "Issue Type", "Status", "Jira Type", "QA Verified Version", "Resolution", "Invalid Reason"])
+    filepath = f"{filename}.xlsx"
+    
+    df.to_excel(filepath, index=False)
+
+    # Load workbook to apply formatting
+    wb = load_workbook(filepath)
+    ws = wb.active
+
+    user_versions_set = set(v.strip() for v in user_versions.split(","))
+
+    # Apply red font if none of the user-entered versions match the QA Verified Version field
+    for row in ws.iter_rows(min_row=2, max_row=len(data)+1, min_col=2, max_col=2):
+        for cell in row:
+            issue_key = cell.value
+            qa_verified_versions = set(ws[f"F{cell.row}"].value.split(",")) if ws[f"F{cell.row}"].value else set()
+            
+            if not user_versions_set.intersection(qa_verified_versions):  # No match found
+                cell.font = Font(color="FF0000")  # Red color
+
+    wb.save(filepath)
+    return filepath
+
+# Function to run data download in a separate thread
+def start_download():
+    jql_values = jql_entry.get().strip()
+    filename = filename_entry.get().strip()
+    user_versions = qa_verified_entry.get().strip()
+
+    if not filename or not jql_values or not user_versions:
+        messagebox.showerror("Error", "Filename, JQL values, and QA Verified Versions are required!")
+        return
+
+    output_console.insert(tk.END, "Fetching Jira data...\n")
+    
+    def run():
+        progress_bar["value"] = 0
+        data, error = fetch_jira_data(jql_values, progress_bar["value"])
+        
+        if error:
+            output_console.insert(tk.END, f"Error: {error}\n", "error")
+            return
+        
+        filepath = save_to_excel(data, filename, user_versions)
+        output_console.insert(tk.END, f"File saved: {filepath}\n")
+
+        progress_bar["value"] = 100
+
+    threading.Thread(target=run, daemon=True).start()
+
+# Create GUI
+root = tk.Tk()
+root.title("Jira Data Downloader")
+root.geometry("400x400")
+
+# Labels and Input Fields
+tk.Label(root, text="Filename (without extension):").pack(pady=5)
+filename_entry = tk.Entry(root, width=50)
+filename_entry.pack(pady=5)
+
+tk.Label(root, text="JQL Values (comma-separated):").pack(pady=5)
+jql_entry = tk.Entry(root, width=50)
+jql_entry.pack(pady=5)
+
+tk.Label(root, text="QA Verified Versions (comma-separated):").pack(pady=5)
+qa_verified_entry = tk.Entry(root, width=50)
+qa_verified_entry.pack(pady=5)
+
+# Progress Bar
+progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
+progress_bar.pack(pady=10)
+
+# Console Output
+output_console = tk.Text(root, height=10, width=50)
+output_console.pack(pady=5)
+
+# Download Button
+download_btn = tk.Button(root, text="Download Data", command=start_download)
+download_btn.pack(pady=10)
+
+root.mainloop()
