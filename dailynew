@@ -1,0 +1,109 @@
+import os
+import smtplib
+import chardet  # To detect file encoding
+import tkinter as tk
+from tkinter import filedialog, messagebox, Label, Button, Entry
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import re  # For email validation
+
+# SMTP Configuration
+SMTP_HOST = "email-smtp.india.west.amazonaws.com"
+SMTP_PORT = 6898
+SMTP_USERNAME = "jdjdjjd"
+SMTP_PASSWORD = "djdjdjdjd"
+SENDER_NAME = "crm"
+SENDER_EMAIL = "djjddj@def.com"
+
+TO_ADDRESSES = ["abc@abx.com", "def@abc.com"]
+CC_ADDRESSES = ["xyb@abc.com", "bncjv@abx.com"]
+
+# Function to detect file encoding
+def detect_encoding(file_path):
+    print("Step 1: Detecting file encoding...")
+    with open(file_path, 'rb') as file:
+        raw_data = file.read()
+    result = chardet.detect(raw_data)
+    encoding = result['encoding']
+    print(f"Detected encoding: {encoding}")
+    return encoding
+
+# Function to validate email addresses (only @gmail.com allowed)
+def validate_email(email):
+    return re.fullmatch(r"[a-zA-Z0-9._%+-]+@gmail\.com", email) is not None
+
+# Function to send email
+def send_email(subject, body, additional_email):
+    print("Step 4: Preparing email for sending...")
+    
+    # Validate additional email
+    if additional_email and not validate_email(additional_email):
+        messagebox.showerror("Invalid Email", "Only @gmail.com emails are allowed.")
+        print("Error: Invalid email format. Allowed domain: @gmail.com")
+        return
+
+    # Append additional email to the recipient list
+    all_recipients = TO_ADDRESSES.copy()
+    if additional_email:
+        all_recipients.append(additional_email)
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{SENDER_NAME} <{SENDER_EMAIL}>"
+        msg['To'] = ", ".join(all_recipients)
+        msg['Cc'] = ", ".join(CC_ADDRESSES)
+        msg['Subject'] = subject
+
+        body_content = f"<p>Task created successfully, please visit.</p>{body}"
+        msg.attach(MIMEText(body_content, 'html'))
+
+        print("Step 5: Connecting to SMTP server...")
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            print("Step 6: Sending email...")
+            server.sendmail(SENDER_EMAIL, all_recipients + CC_ADDRESSES, msg.as_string())
+
+        messagebox.showinfo("Email Sent", f"Email sent successfully with subject: {subject}")
+        print("Step 7: Email sent successfully.")
+
+    except Exception as e:
+        print("Error: Failed to send email.")
+        print(f"Error Details: {str(e)}")
+        messagebox.showerror("Error", f"Failed to send email: {str(e)}")
+
+# Function to open and read HTML file
+def open_html_file():
+    file_path = filedialog.askopenfilename(filetypes=[("HTML Files", "*.html")])
+
+    if file_path:
+        print("Step 2: User selected a file:", file_path)
+
+        encoding = detect_encoding(file_path)
+        with open(file_path, 'r', encoding=encoding) as file:
+            html_content = file.read()
+
+        subject = os.path.basename(file_path).replace('.html', '')
+        print(f"Step 3: Extracted subject from file: {subject}")
+
+        additional_email = email_entry.get().strip()  # Get email from input field
+        send_email(subject, html_content, additional_email)
+
+# Create GUI Window
+root = tk.Tk()
+root.title("Email Sender")
+
+# Set window size and disable resizing
+root.geometry("350x250")  # Adjusted for better usability
+root.resizable(False, False)
+
+# UI Elements
+Label(root, text="Select an HTML file to send as an email", font=("Arial", 12)).pack(pady=10)
+Button(root, text="Browse HTML File", command=open_html_file, font=("Arial", 10)).pack(pady=5)
+
+Label(root, text="Additional Gmail Email:", font=("Arial", 10)).pack(pady=5)
+email_entry = Entry(root, font=("Arial", 10), width=30)
+email_entry.pack(pady=5)
+
+# Keep UI open
+root.mainloop()
