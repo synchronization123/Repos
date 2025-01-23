@@ -1,0 +1,129 @@
+import os
+import requests
+import pandas as pd
+from datetime import datetime
+from urllib.parse import quote_plus
+
+# JIRA Configuration
+JIRA_URL = "https://jira.xem.com/sr/jira.issueviews:search-fields/temp/SearchRequest.csv?jqlQuery="
+TOKEN = "jskdjdjd"
+
+# Get user input for versions
+versions = input("Enter application versions (comma-separated): ").split(",")
+
+# Get current date
+current_date = datetime.today().strftime('%Y-%m-%d')
+
+# Create lists to store merged data
+develop_data = []
+non_develop_data = []
+
+# Function to encode JQL query
+def encode_jql(query):
+    return quote_plus(query)
+
+# Function to download and process JIRA CSV
+def download_jira_csv(version, jql, filename):
+    encoded_jql = encode_jql(jql)  # URL-encode the JQL query
+    url = f"{JIRA_URL}{encoded_jql}"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        with open(filename, "wb") as file:
+            file.write(response.content)
+        return True
+    else:
+        print(f"Failed to download data for {version} with JQL: {encoded_jql}")
+        return False
+
+# Function to clean and process CSV
+def process_csv(version, filename, is_security=False):
+    df = pd.read_csv(filename)
+
+    # Keep only required columns
+    df = df[['Issue key', 'Issue Type']]
+
+    # Add additional columns
+    df["Date"] = current_date
+    df["Version"] = version
+    df["Status"] = "Pending"
+    df["Assigned on"] = current_date
+    df["Analyst comments"] = ""
+    df["Mentor review"] = "Pending"
+    df["Feedback"] = ""
+
+    # Assign category if it's a security JIRA
+    if is_security:
+        df["Category"] = "Security Jira"
+    else:
+        df["Category"] = ""
+
+    return df
+
+# Process each version separately
+for version in versions:
+    version = version.strip()
+    
+    # Define filenames
+    jql1 = f'Builds in ({version}) AND component not in (Security, AppSecurity)'
+    jql2 = f'Builds in ({version}) AND component in (Security, AppSecurity)'
+
+    jql1_filename = f"{version}_{current_date}_jql1.csv"
+    jql2_filename = f"{version}_{current_date}_jql2.csv"
+
+    # Download JIRA data
+    if download_jira_csv(version, jql1, jql1_filename):
+        df_jql1 = process_csv(version, jql1_filename)
+    else:
+        continue
+
+    if download_jira_csv(version, jql2, jql2_filename):
+        df_jql2 = process_csv(version, jql2_filename, is_security=True)
+    else:
+        continue
+
+    # Combine JQL1 and JQL2 data
+    df_combined = pd.concat([df_jql1, df_jql2])
+
+    # Assign JIRAs to users for non-security issues (max 30 per user)
+    non_security_issues = df_combined[df_combined["Category"] != "Security Jira"]
+    num_non_security = len(non_security_issues)
+
+    if num_non_security > 0:
+        assignees = []
+        num_users = (num_non_security // 30) + 1
+        for i in range(num_users):
+            username = input(f"Assign JIRAs to user {i+1}: ")
+            assignees.extend([username] * 30)
+
+        df_combined.loc[df_combined["Category"] != "Security Jira", "Assigned to"] = assignees[:num_non_security]
+
+    # Assign Security JIRAs to a user
+    security_issues = df_combined[df_combined["Category"] == "Security Jira"]
+    if len(security_issues) > 0:
+        sec_assignee = input("Assign Security JIRAs to user: ")
+        df_combined.loc[df_combined["Category"] == "Security Jira", "Assigned to"] = sec_assignee
+
+    # Categorize as Develop or Non-Develop
+    if "develop" in version.lower():
+        develop_data.append(df_combined)
+    else:
+        non_develop_data.append(df_combined)
+
+    # Delete individual CSV files
+    os.remove(jql1_filename)
+    os.remove(jql2_filename)
+
+# Merge Develop versions
+if develop_data:
+    df_develop_final = pd.concat(develop_data)
+    df_develop_final.to_csv(f"Develop_{current_date}.csv", index=False)
+
+# Merge Non-Develop versions
+if non_develop_data:
+    df_non_develop_final = pd.concat(non_develop_data)
+    df_non_develop_final.to_csv(f"Non-Develop_{current_date}.csv", index=False)
+
+print("Process completed. Final CSV files generated.")
