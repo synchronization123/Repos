@@ -1,0 +1,148 @@
+import os
+import requests
+import pandas as pd
+from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.styles import Font
+
+# JIRA Configuration
+JIRA_URL = "https://jira.xem.com/sr/jira.issueviews:search-fields/temp/SearchRequest.csv?jqlQuery="
+TOKEN = "jskdjdjd"
+
+HEADERS = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Accept": "text/csv"
+}
+
+# Function to download JIRA CSV
+def download_jira_csv(version, is_security):
+    jql = f"builds in ({version}) AND Component IN (Security, AppSecurity)" if is_security else f"builds in ({version}) AND Component NOT IN (Security, AppSecurity)"
+    csv_url = f"{JIRA_URL}{jql}"
+    
+    response = requests.get(csv_url, headers=HEADERS)
+    
+    if response.status_code == 200:
+        filename = f"Security-{version}.csv" if is_security else f"Non-Security-{version}.csv"
+        with open(filename, "wb") as file:
+            file.write(response.content)
+        print(f"✅ Downloaded: {filename}")
+        return filename
+    else:
+        print(f"❌ Failed to download {version}: {response.status_code}")
+        return None
+
+# Function to clean and process CSV files
+def process_csv(filename, version, is_security):
+    df = pd.read_csv(filename)
+
+    # Keep only necessary columns
+    df = df[["Issue key", "Issue Type"]]
+
+    # Add additional columns
+    today_date = datetime.today().strftime("%d-%b-%y")
+    df["Date"] = today_date
+    df["Build"] = version
+    df["Security"] = "Yes" if is_security else "No"
+    df["Assigned To"] = ""
+    df["Status"] = "Pending"
+    df["Assigned On"] = today_date
+    df["Analyst Comments"] = ""
+    df["Mentor Review"] = "Pending"
+    df["Mentor Feedback"] = ""
+
+    return df
+
+# Function to highlight security JIRAs in red
+def highlight_security_issues(excel_file):
+    wb = load_workbook(excel_file)
+    ws = wb.active
+
+    red_font = Font(color="FF0000")
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
+        for cell in row:
+            if "Security" in str(ws.cell(row=cell.row, column=4).value):  # Security column
+                cell.font = red_font
+
+    wb.save(excel_file)
+    print(f"🎨 Security JIRAs highlighted in {excel_file}")
+
+# Function to assign JIRAs to users
+def assign_users(df):
+    assigned_users = {}
+    issue_counts = df["Issue Type"].value_counts()
+
+    print("\n📊 Issue Type Summary for Assignment:")
+    print(issue_counts.to_string())
+
+    for issue_type, count in issue_counts.items():
+        if count > 40:
+            users = input(f"Enter comma-separated usernames for {issue_type} (Total: {count}): ").split(",")
+            users = [user.strip() for user in users]
+            df.loc[df["Issue Type"] == issue_type, "Assigned To"] = users * (count // len(users)) + users[:count % len(users)]
+        else:
+            user = input(f"Enter username for {issue_type} (Total: {count}): ")
+            df.loc[df["Issue Type"] == issue_type, "Assigned To"] = user
+
+    return df
+
+# Main function
+def main():
+    # Step 1: Get versions from user
+    versions = input("Enter JIRA versions (comma-separated): ").split(",")
+
+    # Step 2: Download and process CSV files
+    all_data = pd.DataFrame()
+    csv_files = []
+
+    for version in versions:
+        version = version.strip()
+
+        non_sec_file = download_jira_csv(version, is_security=False)
+        sec_file = download_jira_csv(version, is_security=True)
+
+        if non_sec_file:
+            df_non_sec = process_csv(non_sec_file, version, is_security=False)
+            all_data = pd.concat([all_data, df_non_sec], ignore_index=True)
+            csv_files.append(non_sec_file)
+
+        if sec_file:
+            df_sec = process_csv(sec_file, version, is_security=True)
+            all_data = pd.concat([all_data, df_sec], ignore_index=True)
+            csv_files.append(sec_file)
+
+    # Step 3: Split Develop & Non-Develop Data
+    develop_data = all_data[all_data["Build"].str.contains("develop", case=False)]
+    non_develop_data = all_data[~all_data["Build"].str.contains("develop", case=False)]
+
+    # Step 4: Assign Users to Non-Security & Security JIRAs
+    print("\n🔹 Assigning Non-Security JIRAs:")
+    non_develop_data = assign_users(non_develop_data)
+
+    print("\n🔹 Assigning Security JIRAs:")
+    develop_data = assign_users(develop_data)
+
+    # Step 5: Save Develop & Non-Develop Excel Files
+    today_date = datetime.today().strftime("%d-%b-%Y")
+    develop_file = f"Develop-{today_date}.xlsx"
+    non_develop_file = f"NonDevelop-{today_date}.xlsx"
+
+    develop_data.to_excel(develop_file, index=False)
+    non_develop_data.to_excel(non_develop_file, index=False)
+
+    print(f"\n✅ Excel Files Generated:\n{develop_file}\n{non_develop_file}")
+
+    # Step 6: Highlight Security JIRAs in Red
+    highlight_security_issues(develop_file)
+    highlight_security_issues(non_develop_file)
+
+    # Step 7: Delete Temporary CSVs
+    for file in csv_files:
+        os.remove(file)
+
+    print("\n🗑️ Temporary CSV files deleted.")
+    print("✅ Process Finished Successfully!")
+
+# Run the script
+if __name__ == "__main__":
+    main()
