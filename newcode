@@ -1,0 +1,166 @@
+import requests
+import pandas as pd
+import os
+from datetime import datetime
+
+# JIRA URL for CSV Export
+JIRA_URL = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-current-fields/temp/SearchRequest.csv?jqlQuery="
+
+# User Input: Versions
+versions = input("Enter versions (comma-separated): ").strip()
+version_list = [v.strip() for v in versions.split(",")]
+
+# Ensure at least one version is provided
+if not version_list:
+    print("❌ No versions entered. Exiting.")
+    exit()
+
+# Authentication Token
+TOKEN = "djdjdjdjdjd"
+
+# Headers with Authentication
+headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/octet-stream",
+}
+
+# Function to download JIRA data for each version
+def download_jira_csv(version):
+    start_at = 0
+    max_results = 1000
+    all_data = []
+    
+    JQL = f"builds in ({version})"
+
+    while True:
+        jql_encoded = JQL.replace(" ", "%20")  # Encode spaces in JQL
+        csv_url = f"{JIRA_URL}{jql_encoded}&startAt={start_at}&maxResults={max_results}"
+        
+        response = requests.get(csv_url, headers=headers)
+
+        if response.status_code == 200:
+            print(f"✅ Fetched data from {start_at} to {start_at + max_results} for version {version}")
+            data = response.text.splitlines()
+            all_data.extend(data[1:])  # Skip header in all batches
+
+            if len(data) < max_results + 1:
+                break
+            start_at += max_results
+        else:
+            print(f"❌ Failed to fetch data for version {version}. Status Code: {response.status_code}")
+            break
+
+    if all_data:
+        headers = data[0].split(",")
+        target_columns = ["Issue key", "Status", "Component/s", "QA verified version", "Resolution", "Priority", "Issue Type"]
+        column_indices = [headers.index(col) for col in target_columns if col in headers]
+
+        filtered_data = []
+        for row in all_data:
+            row_values = row.split(",")
+            filtered_row = [row_values[i] for i in column_indices]
+            filtered_data.append(filtered_row)
+
+        # Concatenate multi-value columns
+        for row in filtered_data:
+            row[2] = ",".join(row[2].split(","))  # Component/s
+            row[3] = ",".join(row[3].split(","))  # QA verified version
+
+        for row in filtered_data:
+            row.append("")  # Review Status
+            row.append("")  # Mentor Review
+
+        for row in filtered_data:
+            row.append(version)  # Source file name without .csv
+
+        df = pd.DataFrame(filtered_data, columns=target_columns + ["Review Status", "Mentor Review", "Versions"])
+
+        file_name = f"{version}_data.csv"
+        df.to_csv(file_name, index=False)
+        print(f"✅ JIRA data for version {version} saved as '{file_name}'.")
+        return df
+    else:
+        print(f"❌ No data fetched for version {version}.")
+        return None
+
+# Function to display summary before assignment
+def display_summary(df):
+    security_issues_df = df[df['Component/s'].str.contains('Security|AppSecurity', case=False, na=False)]
+    non_security_issues_df = df[~df['Component/s'].str.contains('Security|AppSecurity', case=False, na=False)]
+
+    print("\n🔹 **Summary Before Assignment** 🔹")
+    print(f"🔸 Number of Security/AppSecurity JIRAs: {len(security_issues_df)}")
+    
+    issue_type_counts = non_security_issues_df['Issue Type'].value_counts()
+    print("\n🔹 Non-Security JIRAs by Issue Type:")
+    for issue_type, count in issue_type_counts.items():
+        print(f"   - {issue_type}: {count}")
+    
+    input("\nPress Enter to continue with assignment...")
+
+# Function to assign JIRAs
+def assign_issues(df):
+    security_issues_df = df[df['Component/s'].str.contains('Security|AppSecurity', case=False, na=False)]
+    non_security_issues_df = df[~df['Component/s'].str.contains('Security|AppSecurity', case=False, na=False)]
+
+    if not security_issues_df.empty:
+        security_users = input("Enter users to assign Security/AppSecurity issues (comma-separated): ").strip().split(",")
+        security_users = [u.strip() for u in security_users]
+        security_issues_df['Assigned To'] = [security_users[i % len(security_users)] for i in range(len(security_issues_df))]
+
+    user_assignments = {}
+    for issue_type in non_security_issues_df['Issue Type'].unique():
+        issue_count = len(non_security_issues_df[non_security_issues_df['Issue Type'] == issue_type])
+
+        if issue_count <= 40:
+            user = input(f"Enter user to assign {issue_count} {issue_type} issues: ").strip()
+            user_assignments[issue_type] = [user] * issue_count
+        else:
+            users = input(f"Enter users for {issue_type} issues (comma-separated): ").strip().split(",")
+            users = [u.strip() for u in users]
+            if not users:
+                users = [input(f"Enter user to assign {issue_count} {issue_type} issues: ").strip()]
+
+            issues_per_user = issue_count // len(users)
+            remaining_issues = issue_count % len(users)
+
+            user_assignments[issue_type] = []
+            for i in range(len(users)):
+                count_for_this_user = issues_per_user + (1 if i < remaining_issues else 0)
+                user_assignments[issue_type].extend([users[i]] * count_for_this_user)
+
+    non_security_issues_df['Assigned To'] = non_security_issues_df.apply(lambda row: user_assignments[row['Issue Type']].pop(0), axis=1)
+
+    all_issues_df = pd.concat([security_issues_df, non_security_issues_df], ignore_index=True)
+
+    current_date = datetime.now().strftime("%d-%b-%Y")
+    all_issues_df['Current Date'] = current_date
+    all_issues_df['Assignment Date'] = current_date
+
+    final_output_file = f"final_assigned_issues.csv"
+    all_issues_df.to_csv(final_output_file, index=False)
+    print(f"✅ Final assigned issues saved to '{final_output_file}'.")
+
+    develop_df = all_issues_df[all_issues_df['Versions'].str.contains('develop', case=False)]
+    non_develop_df = all_issues_df[~all_issues_df['Versions'].str.contains('develop', case=False)]
+
+    develop_file = f"develop_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    non_develop_file = f"non-develop_{datetime.now().strftime('%Y-%m-%d')}.csv"
+
+    develop_df.to_csv(develop_file, index=False)
+    non_develop_df.to_csv(non_develop_file, index=False)
+
+    print(f"✅ Develop issues saved to '{develop_file}'.")
+    print(f"✅ Non-develop issues saved to '{non_develop_file}'.")
+
+    for file in os.listdir():
+        if file not in [develop_file, non_develop_file]:
+            os.remove(file)
+            print(f"🗑️ Deleted {file}")
+
+# Process JIRA data for each version
+for version in version_list:
+    df = download_jira_csv(version)
+    if df is not None:
+        display_summary(df)
+        assign_issues(df)
