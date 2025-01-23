@@ -1,0 +1,58 @@
+import pandas as pd
+from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.worksheet.datavalidation import DataValidation
+
+# Step 1: Input Version and Load the Excel File
+version = input("Enter the version name: ")
+
+# Step 2: Load the Excel File
+input_file = 'Filtered_JiraData.xlsx'
+df = pd.read_excel(input_file)
+
+# Step 3: Filter columns - Keep only 'Issue key', 'Issue Type', 'Security'
+df = df[['Issue key', 'Issue Type', 'Security']]
+
+# Step 4: Add additional columns with required data
+current_date = datetime.today().strftime('%Y-%m-%d')
+df['Date'] = current_date
+df['version'] = version
+df['Status'] = 'Pending'
+df['Assigned on'] = current_date
+df['Analyst comments'] = ''
+df['Mentor review'] = 'Pending'
+df['Feedback'] = ''
+
+# Step 5: Ensure columns are included even if empty and arrange columns in the desired order
+df = df[['Date', 'Issue key', 'Issue Type', 'version', 'Status', 'Assigned on', 'Analyst comments', 'Mentor review', 'Feedback']]
+
+# Step 6: Save the DataFrame to a new Excel file
+output_file = f"{version}.xlsx"
+df.to_excel(output_file, index=False)
+
+# Step 7: Add drop-down lists to 'Status' and 'Mentor review' columns using openpyxl
+wb = load_workbook(output_file)
+ws = wb.active
+
+# Create a DataValidation object for 'Status' column with the list of choices
+status_choices = ['Pending', 'Started', 'Not Started']
+status_validation = DataValidation(type="list", formula1=f'"{",".join(status_choices)}"', showDropDown=True)
+
+# Create a DataValidation object for 'Mentor review' column with the list of choices
+mentor_review_choices = ['Pending', 'Reviewed']
+mentor_review_validation = DataValidation(type="list", formula1=f'"{",".join(mentor_review_choices)}"', showDropDown=True)
+
+# Apply the DataValidation to the 'Status' column (5th column, i.e., 'E' column in Excel)
+ws.add_data_validation(status_validation)
+# Apply validation to all cells in the Status column (from row 2 to end)
+status_validation.range = f'E2:E{len(df) + 1}'
+
+# Apply the DataValidation to the 'Mentor review' column (8th column, i.e., 'H' column in Excel)
+ws.add_data_validation(mentor_review_validation)
+# Apply validation to all cells in the Mentor review column (from row 2 to end)
+mentor_review_validation.range = f'H2:H{len(df) + 1}'
+
+# Save the workbook with the drop-downs added
+wb.save(output_file)
+
+print(f"File saved successfully as {output_file} with drop-downs in Status and Mentor review columns")
