@@ -1,0 +1,153 @@
+import os
+import requests
+import pandas as pd
+from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+
+# JIRA Configurations
+JIRA_BASE_URL = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-current-fields/temp/SearchRequest.csv?jqlQuery="
+TOKEN = "djdjdjdjdjd"
+
+# Headers for authentication
+HEADERS = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Accept": "text/csv"
+}
+
+# Function to download JIRA CSV
+def download_jira_csv(version, is_security=False):
+    jql = f"Component in (Security, AppSecurity) and builds in ({version})" if is_security else f"builds in ({version})"
+    csv_url = f"{JIRA_BASE_URL}{jql}"
+    
+    response = requests.get(csv_url, headers=HEADERS)
+    
+    if response.status_code == 200:
+        filename_prefix = version[:10]  # First 10 letters of version
+        filename = f"{filename_prefix}_jql2.csv" if is_security else f"{filename_prefix}_jql1.csv"
+        with open(filename, "wb") as file:
+            file.write(response.content)
+        print(f"✅ Downloaded: {filename}")
+        return filename
+    else:
+        print(f"❌ Failed to download {version}: {response.status_code}")
+        return None
+
+# Function to process CSV files
+def process_csv(filename, version):
+    df = pd.read_csv(filename)
+
+    # Renaming columns as per requirement
+    df.rename(columns={
+        "Issue key": "Issue Key",
+        "Status": "Status",
+        "Component": "Component/s",  # Handling mismatch between JIRA and Excel
+        "QA Verified Version": "QA Verified Version",
+        "Resolution": "Resolution",
+        "Priority": "Priority"
+    }, inplace=True)
+
+    # Merging multi-value fields into a single comma-separated string
+    df["Component/s"] = df["Component/s"].astype(str).str.replace("\n", ", ")
+    df["QA Verified Version"] = df["QA Verified Version"].astype(str).str.replace("\n", ", ")
+
+    # Adding extra columns
+    df["Source File"] = version  # No `.csv` extension in source file name
+    today_date = datetime.today().strftime("%d-%b-%Y")
+    df["Current Date"] = today_date
+    df["Assignment Date"] = today_date
+
+    return df
+
+# Function to highlight security JIRAs in red
+def highlight_security_issues(excel_file):
+    wb = load_workbook(excel_file)
+    ws = wb.active
+    
+    red_fill = PatternFill(start_color="FF6666", end_color="FF6666", fill_type="solid")
+
+    # Assuming "Component/s" is in column C (adjust if needed)
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=3, max_col=3):
+        for cell in row:
+            if "Security" in str(cell.value) or "AppSecurity" in str(cell.value):
+                for c in ws[cell.row]:  # Highlight entire row
+                    c.fill = red_fill
+
+    wb.save(excel_file)
+    print(f"🎨 Security JIRAs highlighted in {excel_file}")
+
+# Main function
+def main():
+    # Step 1: Get versions from user
+    versions = input("Enter JIRA versions (comma-separated): ").split(",")
+
+    # Step 2: Download all CSV files
+    csv_files = []
+    for version in versions:
+        version = version.strip()
+        non_sec_file = download_jira_csv(version, is_security=False)
+        sec_file = download_jira_csv(version, is_security=True)
+        
+        if non_sec_file:
+            csv_files.append((non_sec_file, version, "Non-Security"))
+        if sec_file:
+            csv_files.append((sec_file, version, "Security"))
+
+    # Step 3: Process and merge all CSV files
+    all_data = pd.DataFrame()
+    for file, version, file_type in csv_files:
+        df = process_csv(file, version)
+        df["Type"] = file_type  # Mark Security vs. Non-Security
+        all_data = pd.concat([all_data, df], ignore_index=True)
+
+    # Step 4: **Display summary before assignment**
+    security_jiras = all_data[all_data["Type"] == "Security"]
+    non_security_jiras = all_data[all_data["Type"] == "Non-Security"]
+
+    print("\n📊 JIRA Summary Before Assignment:")
+    print(f"🔹 Total Security JIRAs: {len(security_jiras)}\n")
+
+    issue_type_counts = non_security_jiras["Issue Key"].groupby(non_security_jiras["Priority"]).count()
+    print("🔹 Non-Security JIRAs by Priority:")
+    print(issue_type_counts.to_string())
+
+    # Step 5: **Get users for Security JIRAs**
+    if len(security_jiras) > 0:
+        security_users = input("Enter users for Security JIRAs (comma-separated): ").split(",")
+        security_jiras["Assigned To"] = security_users * (len(security_jiras) // len(security_users)) + security_users[:len(security_jiras) % len(security_users)]
+
+    # Step 6: **Assign non-security JIRAs based on priority threshold**
+    for priority, count in issue_type_counts.items():
+        user_count = max(1, count // 40)  # At least 1 user
+        users = input(f"Enter {user_count} users for Priority {priority}: ").split(",")
+        non_security_jiras.loc[non_security_jiras["Priority"] == priority, "Assigned To"] = users * (count // len(users)) + users[:count % len(users)]
+
+    # Step 7: **Merge Security and Non-Security JIRAs**
+    final_data = pd.concat([security_jiras, non_security_jiras], ignore_index=True)
+
+    # Step 8: **Split into develop and non-develop files**
+    today_date = datetime.today().strftime("%d-%b-%Y")
+    develop_data = final_data[final_data["Source File"].str.contains("develop", case=False)]
+    non_develop_data = final_data[~final_data["Source File"].str.contains("develop", case=False)]
+
+    develop_file = f"develop_{today_date}.xlsx"
+    non_develop_file = f"non-develop_{today_date}.xlsx"
+
+    develop_data.to_excel(develop_file, index=False)
+    non_develop_data.to_excel(non_develop_file, index=False)
+
+    print(f"\n✅ Final Excel Files Generated:\n{develop_file}\n{non_develop_file}")
+
+    # Step 9: **Highlight Security JIRAs in Red**
+    highlight_security_issues(develop_file)
+    highlight_security_issues(non_develop_file)
+
+    # Step 10: **Delete temporary CSV files**
+    for file, _, _ in csv_files:
+        os.remove(file)
+
+    print("\n🗑️ Temporary files deleted. Process complete!")
+
+# Run the script
+if __name__ == "__main__":
+    main()
