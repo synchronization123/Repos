@@ -1,0 +1,131 @@
+import requests
+import pandas as pd
+import os
+from datetime import datetime
+
+# User Input
+JIRA_URL = "https://jira.crm.com/sr/jira.issueviews:searchrequest-csv-current-fields/temp/SearchRequest.csv?jqlQuery="
+TOKEN = "djdjdjdjdjd"
+
+# Get User Input for Versions
+versions = input("Enter JIRA versions (comma-separated): ").strip().split(',')
+versions = [v.strip() for v in versions]  # Clean version inputs
+
+# Headers for authentication
+headers = {"Cookie": f"JSESSIONID={TOKEN}"}
+
+# Define required columns from JIRA CSV
+columns_to_keep = ["Issue key", "Status", "Component/s", "QA Verified Version", "Resolution", "Priority"]
+
+# Today's Date
+today_date = datetime.today().strftime("%d-%b-%Y")
+
+# Store downloaded files
+downloaded_files = []
+
+# Step 1: Download JIRA data for each version
+for version in versions:
+    version_filename = version[:10]  # Keep only first 10 letters
+    csv_filename = f"{version_filename}.csv"
+    
+    # Construct JQL query
+    jql_query = f'builds in ("{version}")'
+    csv_url = f"{JIRA_URL}{jql_query}"
+    
+    print(f"Downloading: {csv_filename}")
+    
+    # Request JIRA CSV data
+    response = requests.get(csv_url, headers=headers)
+    if response.status_code == 200:
+        with open(csv_filename, 'wb') as file:
+            file.write(response.content)
+        downloaded_files.append(csv_filename)
+    else:
+        print(f"Failed to download {csv_filename}")
+
+# Step 2: Merge all downloaded CSVs into a single DataFrame
+final_df = pd.DataFrame()
+
+for file in downloaded_files:
+    df = pd.read_csv(file)
+    
+    # Keep only required columns and fill missing ones
+    df = df[columns_to_keep].fillna("")
+    
+    # Concatenate multi-value columns into a single comma-separated value
+    df["Component/s"] = df["Component/s"].apply(lambda x: ", ".join(set(str(x).split(", "))))
+    df["QA Verified Version"] = df["QA Verified Version"].apply(lambda x: ", ".join(set(str(x).split(", "))))
+    
+    # Add version name as a new column
+    version_name = file.replace(".csv", "")
+    df["Source File"] = version_name
+    
+    final_df = pd.concat([final_df, df], ignore_index=True)
+
+# Step 3: Summarize JIRA counts before assignment
+security_issues = final_df[final_df["Component/s"].str.contains("Security|AppSecurity", case=False, na=False)]
+non_security_issues = final_df[~final_df["Component/s"].str.contains("Security|AppSecurity", case=False, na=False)]
+
+print("\nJIRA Summary Before Assignment:")
+print(f"Total Security JIRAs: {len(security_issues)}")
+print("Non-Security JIRAs by Issue Type:")
+print(non_security_issues["Status"].value_counts())
+
+# Step 4: Assign Security JIRAs Separately
+if len(security_issues) > 0:
+    security_users = input("Enter users for Security JIRAs (comma-separated): ").strip().split(',')
+    security_users = [u.strip() for u in security_users]
+    
+    if len(security_users) == 0:
+        print("No users provided. Security JIRAs remain unassigned.")
+    else:
+        security_issues["Assigned To"] = security_users * (len(security_issues) // len(security_users)) + security_users[:len(security_issues) % len(security_users)]
+
+# Step 5: Assign Non-Security JIRAs Based on Issue Type
+assigned_dfs = []
+for issue_type, group in non_security_issues.groupby("Status"):
+    issue_count = len(group)
+    print(f"{issue_type}: {issue_count} JIRAs")
+
+    if issue_count <= 40:
+        users = input(f"Enter 1 user for {issue_type}: ").strip().split(',')
+    else:
+        users_needed = -(-issue_count // 40)  # Round up division
+        users = input(f"Enter {users_needed} users for {issue_type}: ").strip().split(',')
+
+    users = [u.strip() for u in users if u.strip()]
+    
+    if len(users) == 0:
+        print(f"No users provided for {issue_type}. JIRAs remain unassigned.")
+    else:
+        group["Assigned To"] = users * (issue_count // len(users)) + users[:issue_count % len(users)]
+    
+    assigned_dfs.append(group)
+
+# Combine assigned JIRAs
+final_assigned_df = pd.concat([security_issues] + assigned_dfs, ignore_index=True)
+
+# Step 6: Add Date Columns
+final_assigned_df["Current Date"] = today_date
+final_assigned_df["Assignment Date"] = today_date
+
+# Step 7: Split into Develop and Non-Develop Files
+develop_df = final_assigned_df[final_assigned_df["Source File"].str.contains("develop", case=False)]
+non_develop_df = final_assigned_df[~final_assigned_df["Source File"].str.contains("develop", case=False)]
+
+# Save Final CSVs
+develop_filename = f"develop_{today_date}.csv"
+non_develop_filename = f"non-develop_{today_date}.csv"
+
+develop_df.to_csv(develop_filename, index=False)
+non_develop_df.to_csv(non_develop_filename, index=False)
+
+print(f"\nFinal CSVs Generated:")
+print(f"✅ {develop_filename}")
+print(f"✅ {non_develop_filename}")
+
+# Step 8: Cleanup - Delete intermediate CSV files
+for file in downloaded_files:
+    os.remove(file)
+
+print("Temporary files deleted. Process complete!")
