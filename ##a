@@ -1,0 +1,31 @@
+import pandas as pd
+from datetime import datetime
+
+# Step 1: Input Version and Load the Excel File
+version = input("Enter the version name: ")
+
+# Step 2: Load the Excel File
+input_file = 'Filtered_JiraData.xlsx'
+df = pd.read_excel(input_file)
+
+# Step 3: Filter columns - Keep only 'Issue key', 'Issue Type', 'Security'
+df = df[['Issue key', 'Issue Type', 'Security']]
+
+# Step 4: Add additional columns with required data
+current_date = datetime.today().strftime('%Y-%m-%d')
+df['Date'] = current_date
+df['version'] = version
+df['Status'] = 'Pending'
+df['Assigned on'] = current_date
+df['Analyst comments'] = ''
+df['Mentor review'] = 'Pending'
+df['Feedback'] = ''
+
+# Step 5: Ensure columns are included even if empty and arrange columns in the desired order
+df = df[['Date', 'Issue key', 'Issue Type', 'version', 'Status', 'Assigned on', 'Analyst comments', 'Mentor review', 'Feedback']]
+
+# Step 6: Save the DataFrame to a new Excel file
+output_file = f"{version}.xlsx"
+df.to_excel(output_file, index=False)
+
+print(f"File saved successfully as {output_file}")
