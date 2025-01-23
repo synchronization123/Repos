@@ -1,0 +1,91 @@
+import os
+import pandas as pd
+from datetime import datetime
+
+# Configuration
+INPUT_FOLDER = "."  # Set this to the folder where your Excel files are located
+OUTPUT_FOLDER = "data/output"
+MERGED_FILENAME = "Merged_develop.xlsx"
+FINAL_FILENAME = f"Final_develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+THRESHOLD_PER_USER = 30
+
+# Ensure output directory exists
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# Get list of all files with 'develop' in the filename
+xlsx_files = [f for f in os.listdir(INPUT_FOLDER) if "develop" in f.lower() and f.endswith(".xlsx")]
+
+if not xlsx_files:
+    print("No files found with 'develop' in the filename.")
+    exit()
+
+# Merge all Excel files
+merged_df = pd.concat([pd.read_excel(os.path.join(INPUT_FOLDER, file)) for file in xlsx_files], ignore_index=True)
+
+# Save merged file
+merged_df.to_excel(os.path.join(OUTPUT_FOLDER, MERGED_FILENAME), index=False)
+print(f"Merged {len(xlsx_files)} files into {MERGED_FILENAME}")
+
+# Ensure required columns exist
+required_columns = ["Security", "Issue Type", "Version"]
+if not all(col in merged_df.columns for col in required_columns):
+    print("Missing required columns. Ensure 'Security', 'Issue Type', and 'Version' exist in all Excel files.")
+    exit()
+
+# Summary: Security column
+security_issues = merged_df[merged_df["Security"].notna()]
+security_count = len(security_issues)
+print(f"\nSecurity Issues Count: {security_count}")
+
+if security_count > 0:
+    users_needed = (security_count // THRESHOLD_PER_USER) + (1 if security_count % THRESHOLD_PER_USER > 0 else 0)
+    print(f"⚠️ Assign at least {users_needed} users for Security issues.")
+    security_users = input(f"Enter {users_needed} comma-separated usernames: ").split(",")
+
+# Summary: Issue Type column (excluding Security)
+non_security_issues = merged_df[merged_df["Security"].isna()]
+issue_type_summary = non_security_issues["Issue Type"].value_counts()
+
+print("\nIssue Type Breakdown:")
+issue_type_users = {}
+
+for issue, count in issue_type_summary.items():
+    print(f"{issue}: {count}")
+    if count > THRESHOLD_PER_USER:
+        users_needed = (count // THRESHOLD_PER_USER) + (1 if count % THRESHOLD_PER_USER > 0 else 0)
+        print(f"⚠️ Need at least {users_needed} users for Issue Type: {issue}")
+        issue_type_users[issue] = input(f"Enter {users_needed} comma-separated usernames for '{issue}': ").split(",")
+    else:
+        issue_type_users[issue] = ["DefaultUser"]  # Assign a default user if below threshold
+
+# Assign users dynamically
+def assign_users(df):
+    df["Assigned To"] = None  # Create Assigned To column
+    security_idx, issue_idx = 0, {}
+
+    # Assign users for Security issues
+    if security_count > 0:
+        for index in df[df["Security"].notna()].index:
+            df.at[index, "Assigned To"] = security_users[security_idx % len(security_users)]
+            security_idx += 1
+
+    # Assign users for each Issue Type
+    for issue, users in issue_type_users.items():
+        issue_idx[issue] = 0
+        for index in df[(df["Security"].isna()) & (df["Issue Type"] == issue)].index:
+            df.at[index, "Assigned To"] = users[issue_idx[issue] % len(users)]
+            issue_idx[issue] += 1
+
+    return df
+
+merged_df = assign_users(merged_df)
+
+# Reorder columns: Insert "Assigned To" before "Version"
+cols = merged_df.columns.tolist()
+cols.insert(cols.index("Version"), "Assigned To")
+merged_df = merged_df[cols]
+
+# Save the final file
+final_path = os.path.join(OUTPUT_FOLDER, FINAL_FILENAME)
+merged_df.to_excel(final_path, index=False)
+print(f"\n✅ Final file saved: {final_path}")
