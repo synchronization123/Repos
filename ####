@@ -56,12 +56,12 @@ for issue_type, count in issue_type_counts.items():
     users_input = input(f"Enter comma-separated users for issue type '{issue_type}' (up to {num_users} users): ")
     users = [u.strip() for u in users_input.split(",") if u.strip()]
 
-    # Ensure the user count matches the suggested number
+    # If fewer users are entered than the required number, distribute the issues among the entered users
     if len(users) < num_users:
-        print(f"Warning: You need to input at least {num_users} users. The issues will be assigned sequentially.")
-        users.extend([f"User{i+1}" for i in range(num_users - len(users))])  # Add placeholder users if not enough
-
-    user_assignments[issue_type] = users  # No round-robin, just assign sequentially
+        print(f"Warning: You entered only {len(users)} users. The issues will be distributed equally among the {len(users)} users.")
+    
+    # Assign users to the issue type (sequentially among the entered users)
+    user_assignments[issue_type] = users
 
 # Step 5: Assign users in a sequential manner (30 per user) and distribute issues equally
 assigned_users = []
