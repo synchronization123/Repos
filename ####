@@ -63,22 +63,26 @@ for issue_type, count in issue_type_counts.items():
 
     user_assignments[issue_type] = users  # No round-robin, just assign sequentially
 
-# Step 5: Assign users in a sequential manner (30 per user)
+# Step 5: Assign users in a sequential manner (30 per user) and distribute issues equally
 assigned_users = []
-user_queue = deque()
+user_queue = []
 
+# Loop through users and assign 30 issues sequentially
 for issue_type, users in user_assignments.items():
-    user_queue.extend(users)  # Ensure users are placed in queue
+    num_issues = issue_type_counts[issue_type]  # Number of issues for this type
+    issues_per_user = (num_issues + len(users) - 1) // len(users)  # Ensure distribution is as even as possible
 
-    # Assign 30 issues per user sequentially
-    for _, row in merged_df.iterrows():
-        if row["Issue Types"] == issue_type:
-            # Get the next user in the queue
-            assigned_user = user_queue[0]
-            assigned_users.append(assigned_user)
-            
-            # Move user to the end of the queue (to ensure sequential assignment)
-            user_queue.rotate(-1)
+    # Repeat users until all issues are assigned, distribute equally
+    user_iter = iter(users)
+    current_user = next(user_iter)
+
+    for i in range(num_issues):
+        assigned_users.append(current_user)
+        if (i + 1) % issues_per_user == 0:
+            try:
+                current_user = next(user_iter)
+            except StopIteration:
+                break  # No more users to assign to
 
 # Assign the users to the 'Assigned To' column
 merged_df["Assigned To"] = assigned_users
