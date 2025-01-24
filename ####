@@ -1,19 +1,12 @@
 import os
 import pandas as pd
 from datetime import datetime
-import sys
 
 # Ensure output folder exists
 output_folder = "data/output"
 os.makedirs(output_folder, exist_ok=True)
 
-# Step 1: Kill dataframe function to clear the dataframe memory
-def kill_dataframe(df):
-    """ Clears the dataframe memory to avoid fragmentation """
-    del df
-    return pd.DataFrame()  # return a fresh dataframe
-
-# Step 2: Load and Merge Files
+# Merge all XLSX files in the folder
 merged_data = []
 for file in os.listdir():
     if file.endswith(".xlsx"):
@@ -23,84 +16,49 @@ for file in os.listdir():
 # Combine all data into a single DataFrame
 merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
-# Normalize column names to lowercase for case-insensitive matching
-merged_df.columns = merged_df.columns.str.strip().str.lower()
-
-# Kill the dataframe to clear any fragments at the beginning
-merged_df = kill_dataframe(merged_df)
-
-# Step 3: Reload files into a fresh DataFrame after clearing previous data
-merged_data = []
-for file in os.listdir():
-    if file.endswith(".xlsx"):
-        df = pd.read_excel(file, dtype=str)
-        merged_data.append(df)
-
-# Combine all data again into a single fresh DataFrame
-merged_df = pd.concat(merged_data, ignore_index=True).copy()
+# Standardize column names
+merged_df.columns = merged_df.columns.str.strip()
 
 # Standardize Issue Type values before modifications
 issue_type_mapping = {
-    "bug security": "security",
-    "improvement-technical security": "security",
-    "bug": "functional bug",
-    "story": "epic story"
+    "Bug Security": "Security",
+    "Improvement-Technical Security": "Security",
+    "Bug": "Functional Bug",
+    "Story": "Epic Story"
 }
 
-# Apply Issue Type Mapping (case insensitive)
-merged_df["issue type"] = merged_df["issue type"].replace(issue_type_mapping)
+# Apply Issue Type Mapping
+merged_df["Issue Type"] = merged_df["Issue Type"].replace(issue_type_mapping)
 
-# Concatenate Issue Type with Security if applicable
-if "security" in merged_df.columns:
-    merged_df["issue types"] = merged_df[["issue type", "security"]].astype(str).agg(" ".join, axis=1).str.strip()
-    merged_df.drop(columns=["security"], inplace=True)
+# Concatenate Issue Type with Security (if applicable)
+if "Security" in merged_df.columns:
+    merged_df["Issue Types"] = merged_df[["Issue Type", "Security"]].astype(str).agg(" ".join, axis=1).str.strip()
+    merged_df = merged_df.drop(columns=["Security"])
 else:
-    merged_df["issue types"] = merged_df["issue type"]
-
-# Handle NaN values for Issue Types
-missing_issue_types_count = merged_df["issue types"].isna().sum()
-
-# Step 4: Display summary for missing issue types
-if missing_issue_types_count > 0:
-    print(f"\n⚠️ Missing or malformed 'issue types': {missing_issue_types_count} rows")
-
-# Step 5: Ensure no NaN values in "issue types" column
-merged_df["issue types"].fillna("missing issue type", inplace=True)  # You can also leave it as NaN or "unknown"
+    merged_df["Issue Types"] = merged_df["Issue Type"]
 
 # Convert Date fields
 current_date = datetime.now().strftime("%d-%b-%Y")
-merged_df["date"] = current_date
-merged_df["assigned on"] = current_date
+merged_df["Date"] = current_date
+merged_df["Assigned On"] = current_date
 
-# Step 6: Kill the dataframe to avoid fragmentation at this point
-merged_df = kill_dataframe(merged_df)
-
-# Step 7: Reload the merged dataframe again fresh to continue processing
-merged_data = []
-for file in os.listdir():
-    if file.endswith(".xlsx"):
-        df = pd.read_excel(file, dtype=str)
-        merged_data.append(df)
-
-merged_df = pd.concat(merged_data, ignore_index=True).copy()
-
-# Step 8: Summary by Version → Issue Type
+# Summary by Version → Issue Type
 print("\n📊 Summary by Version:")
-version_summary = merged_df.groupby(["version", "issue types"]).size().reset_index(name="count")
+version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
 print(version_summary)
 
-# Step 9: Summary by Issue Type
+# Summary by Issue Type
 print("\n📊 Summary by Issue Type:")
-issue_summary = merged_df["issue types"].value_counts().reset_index()
-issue_summary.columns = ["issue types", "count"]
+issue_summary = merged_df["Issue Types"].value_counts().reset_index()
+issue_summary.columns = ["Issue Types", "Count"]
 print(issue_summary)
 
-# Step 10: User Input & Assignment
-issue_type_counts = merged_df["issue types"].value_counts()
+# Prompt for user assignment based on Issue Type count
+issue_type_counts = merged_df["Issue Types"].value_counts()
 user_assignment = {}
 
 for issue_type, count in issue_type_counts.items():
-    num_users_required = max(1, count // 30)  
+    num_users_required = max(1, count // 30)  # Ensure at least 1 user
     print(f"\n📝 Issue Type: {issue_type} → {count} issues found.")
     print(f"Suggested: Enter at least {num_users_required} users (30 issues per user).")
 
@@ -113,75 +71,55 @@ for issue_type, count in issue_type_counts.items():
 
     user_assignment[issue_type] = users
 
-# Step 11: Correct Sequential Assignment Logic
+# Sequential assignment logic (no round-robin)
 def assign_users(issue_type, df):
     users = user_assignment.get(issue_type, [])
     if not users:
-        return df  
+        return df  # No assignment needed
 
-    df = df.copy()
+    df = df.copy()  # Avoid modifying original DataFrame
     user_count = len(users)
     
     for i in range(len(df)):
-        df.at[i, "assigned to"] = users[i // 30 % user_count]  
+        df.at[i, "Assigned To"] = users[i // 30 % user_count]  # Assign sequentially (30 per user)
 
     return df
 
 # Apply assignment logic
-merged_df["assigned to"] = ""
+merged_df["Assigned To"] = ""
 for issue_type in user_assignment.keys():
-    merged_df.loc[merged_df["issue types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["issue types"] == issue_type])
+    merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
-# Ensure "assigned to" column is updated and populated
-if merged_df["assigned to"].isna().sum() > 0:
-    print(f"\n⚠️ There are {merged_df['assigned to'].isna().sum()} rows with unassigned users.")
-else:
-    print("\n✅ All rows are correctly assigned to users.")
-
-# Step 12: Summary by Assigned User
+# Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
-assigned_summary = merged_df["assigned to"].value_counts().reset_index()
-assigned_summary.columns = ["assigned to", "count"]
+assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
+assigned_summary.columns = ["Assigned To", "Count"]
 print(assigned_summary)
 
-# Step 13: Split into Develop & Non-Develop
-develop_df = merged_df[merged_df["version"].str.contains("develop", case=False, na=False)].copy()
-non_develop_df = merged_df[~merged_df["version"].str.contains("develop", case=False, na=False)].copy()
+# Split into Develop & Non-Develop
+develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 
 # Drop rows with blank Versions in Non-Develop
-non_develop_df = non_develop_df[non_develop_df["version"].notna()]
-
-# Check if the columns "analyst comments" and "mentor review" exist, else create them with default values
-if "analyst comments" not in non_develop_df.columns:
-    non_develop_df["analyst comments"] = ""
-if "mentor review" not in non_develop_df.columns:
-    non_develop_df["mentor review"] = ""
+non_develop_df = non_develop_df[non_develop_df["Version"].notna()]
 
 # Arrange final columns
-final_columns = ["date", "issue key", "issue types", "version", "assigned to", "status", "assigned on", "analyst comments", "mentor review", "feedback"]
+final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback"]
 develop_df = develop_df[final_columns]
 non_develop_df = non_develop_df[final_columns]
 
-# Step 14: Save Final Files
+# Save final Develop & Non-Develop files
 develop_file = os.path.join(output_folder, f"Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 
 develop_df.to_excel(develop_file, index=False)
 non_develop_df.to_excel(non_develop_file, index=False)
 
-# Step 15: Cleanup Files and Kill Script
+# Clean up intermediate files
 for file in os.listdir():
     if file.endswith(".xlsx") and file not in [develop_file, non_develop_file]:
         os.remove(file)
 
-# Kill dataframe after completion to free memory
-merged_df = kill_dataframe(merged_df)
-develop_df = kill_dataframe(develop_df)
-non_develop_df = kill_dataframe(non_develop_df)
-
 print("\n✅ Process Completed Successfully!")
 print(f"📂 Develop File: {develop_file}")
 print(f"📂 Non-Develop File: {non_develop_file}")
-
-# Kill the script to free memory
-sys.exit()
