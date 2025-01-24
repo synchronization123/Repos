@@ -7,7 +7,13 @@ import sys
 output_folder = "data/output"
 os.makedirs(output_folder, exist_ok=True)
 
-# Step 1: Load and Merge Files
+# Step 1: Kill dataframe function to clear the dataframe memory
+def kill_dataframe(df):
+    """ Clears the dataframe memory to avoid fragmentation """
+    del df
+    return pd.DataFrame()  # return a fresh dataframe
+
+# Step 2: Load and Merge Files
 merged_data = []
 for file in os.listdir():
     if file.endswith(".xlsx"):
@@ -19,6 +25,19 @@ merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
 # Standardize column names
 merged_df.columns = merged_df.columns.str.strip()
+
+# Kill the dataframe to clear any fragments at the beginning
+merged_df = kill_dataframe(merged_df)
+
+# Step 3: Reload files into a fresh DataFrame after clearing previous data
+merged_data = []
+for file in os.listdir():
+    if file.endswith(".xlsx"):
+        df = pd.read_excel(file, dtype=str)
+        merged_data.append(df)
+
+# Combine all data again into a single fresh DataFrame
+merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
 # Standardize Issue Type values before modifications
 issue_type_mapping = {
@@ -43,21 +62,30 @@ current_date = datetime.now().strftime("%d-%b-%Y")
 merged_df["Date"] = current_date
 merged_df["Assigned On"] = current_date
 
-# Step 2: Remove Fragmentation (Ensure Clean Copy)
-merged_df = merged_df.copy()
+# Step 4: Kill the dataframe to avoid fragmentation at this point
+merged_df = kill_dataframe(merged_df)
 
-# Step 3: Summary by Version → Issue Type
+# Step 5: Reload the merged dataframe again fresh to continue processing
+merged_data = []
+for file in os.listdir():
+    if file.endswith(".xlsx"):
+        df = pd.read_excel(file, dtype=str)
+        merged_data.append(df)
+
+merged_df = pd.concat(merged_data, ignore_index=True).copy()
+
+# Step 6: Summary by Version → Issue Type
 print("\n📊 Summary by Version:")
 version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
 print(version_summary)
 
-# Step 4: Summary by Issue Type
+# Step 7: Summary by Issue Type
 print("\n📊 Summary by Issue Type:")
 issue_summary = merged_df["Issue Types"].value_counts().reset_index()
 issue_summary.columns = ["Issue Types", "Count"]
 print(issue_summary)
 
-# Step 5: User Input & Assignment
+# Step 8: User Input & Assignment
 issue_type_counts = merged_df["Issue Types"].value_counts()
 user_assignment = {}
 
@@ -75,7 +103,7 @@ for issue_type, count in issue_type_counts.items():
 
     user_assignment[issue_type] = users
 
-# Step 6: Correct Sequential Assignment Logic
+# Step 9: Correct Sequential Assignment Logic
 def assign_users(issue_type, df):
     users = user_assignment.get(issue_type, [])
     if not users:
@@ -94,13 +122,13 @@ merged_df["Assigned To"] = ""
 for issue_type in user_assignment.keys():
     merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
-# Step 7: Summary by Assigned User
+# Step 10: Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
 assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
 assigned_summary.columns = ["Assigned To", "Count"]
 print(assigned_summary)
 
-# Step 8: Split into Develop & Non-Develop
+# Step 11: Split into Develop & Non-Develop
 develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 
@@ -112,17 +140,22 @@ final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "
 develop_df = develop_df[final_columns]
 non_develop_df = non_develop_df[final_columns]
 
-# Step 9: Save Final Files
+# Step 12: Save Final Files
 develop_file = os.path.join(output_folder, f"Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 
 develop_df.to_excel(develop_file, index=False)
 non_develop_df.to_excel(non_develop_file, index=False)
 
-# Step 10: Cleanup Files and Kill Script
+# Step 13: Cleanup Files and Kill Script
 for file in os.listdir():
     if file.endswith(".xlsx") and file not in [develop_file, non_develop_file]:
         os.remove(file)
+
+# Kill dataframe after completion to free memory
+merged_df = kill_dataframe(merged_df)
+develop_df = kill_dataframe(develop_df)
+non_develop_df = kill_dataframe(non_develop_df)
 
 print("\n✅ Process Completed Successfully!")
 print(f"📂 Develop File: {develop_file}")
