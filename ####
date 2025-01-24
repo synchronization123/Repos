@@ -43,12 +43,12 @@ merged_df["Date"] = current_date
 merged_df["Assigned On"] = current_date
 
 # Summary by Version → Issue Type
-print("\nSummary by Version:")
+print("\n📊 Summary by Version:")
 version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
 print(version_summary)
 
 # Summary by Issue Type
-print("\nSummary by Issue Type:")
+print("\n📊 Summary by Issue Type:")
 issue_summary = merged_df["Issue Types"].value_counts().reset_index()
 issue_summary.columns = ["Issue Types", "Count"]
 print(issue_summary)
@@ -58,14 +58,17 @@ issue_type_counts = merged_df["Issue Types"].value_counts()
 user_assignment = {}
 
 for issue_type, count in issue_type_counts.items():
-    num_users_required = max(1, count // 30)
-    user_input = input(f"Enter {num_users_required} comma-separated users for Issue Type '{issue_type}' ({count} tasks): ").strip()
-    
+    num_users_required = max(1, count // 30)  # Ensure at least 1 user
+    print(f"\n📝 Issue Type: {issue_type} → {count} issues found.")
+    print(f"Suggested: Enter at least {num_users_required} users (30 issues per user).")
+
+    user_input = input(f"Enter {num_users_required} or more comma-separated users: ").strip()
     users = [u.strip() for u in user_input.split(",") if u.strip()]
+
     if not users:
         print("⚠️ No users provided. Skipping assignment for this Issue Type.")
         continue
-    
+
     user_assignment[issue_type] = users
 
 # Sequential assignment logic (no round-robin)
@@ -88,7 +91,7 @@ for issue_type in user_assignment.keys():
     merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
 # Summary by Assigned User
-print("\nSummary by Assigned User:")
+print("\n📊 Summary by Assigned User:")
 assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
 assigned_summary.columns = ["Assigned To", "Count"]
 print(assigned_summary)
