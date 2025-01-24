@@ -58,23 +58,29 @@ for issue_type, count in issue_type_counts.items():
 
     # Ensure the user count matches the suggested number
     if len(users) < num_users:
-        print(f"Warning: You need to input at least {num_users} users. Assigning users equally among {len(users)} entered users.")
-        user_assignments[issue_type] = users  # Assign users equally
-    else:
-        user_assignments[issue_type] = deque(users)  # Round-robin assignment
+        print(f"Warning: You need to input at least {num_users} users. The issues will be assigned sequentially.")
+        users.extend([f"User{i+1}" for i in range(num_users - len(users))])  # Add placeholder users if not enough
+
+    user_assignments[issue_type] = users  # No round-robin, just assign sequentially
 
 # Step 5: Assign users in a sequential manner (30 per user)
 assigned_users = []
-for _, row in merged_df.iterrows():
-    issue_type = row["Issue Types"]
-    if issue_type in user_assignments and user_assignments[issue_type]:
-        # Assign users equally if less than required users
-        assigned_user = user_assignments[issue_type].pop(0)
-        assigned_users.append(assigned_user)
-        user_assignments[issue_type].append(assigned_user)  # Rotate users
-    else:
-        assigned_users.append("Unassigned")
+user_queue = deque()
 
+for issue_type, users in user_assignments.items():
+    user_queue.extend(users)  # Ensure users are placed in queue
+
+    # Assign 30 issues per user sequentially
+    for _, row in merged_df.iterrows():
+        if row["Issue Types"] == issue_type:
+            # Get the next user in the queue
+            assigned_user = user_queue[0]
+            assigned_users.append(assigned_user)
+            
+            # Move user to the end of the queue (to ensure sequential assignment)
+            user_queue.rotate(-1)
+
+# Assign the users to the 'Assigned To' column
 merged_df["Assigned To"] = assigned_users
 
 # Step 6: Ensure correct versioning
