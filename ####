@@ -57,15 +57,25 @@ if "Security" in merged_df.columns:
 else:
     merged_df["Issue Types"] = merged_df["Issue Type"]
 
+# Handle NaN values for Issue Types
+missing_issue_types_count = merged_df["Issue Types"].isna().sum()
+
+# Step 4: Display summary for missing issue types
+if missing_issue_types_count > 0:
+    print(f"\n⚠️ Missing or malformed 'Issue Types': {missing_issue_types_count} rows")
+
+# Step 5: Ensure no NaN values in "Issue Types" column
+merged_df["Issue Types"].fillna("Missing Issue Type", inplace=True)  # You can also leave it as NaN or "Unknown"
+
 # Convert Date fields
 current_date = datetime.now().strftime("%d-%b-%Y")
 merged_df["Date"] = current_date
 merged_df["Assigned On"] = current_date
 
-# Step 4: Kill the dataframe to avoid fragmentation at this point
+# Step 6: Kill the dataframe to avoid fragmentation at this point
 merged_df = kill_dataframe(merged_df)
 
-# Step 5: Reload the merged dataframe again fresh to continue processing
+# Step 7: Reload the merged dataframe again fresh to continue processing
 merged_data = []
 for file in os.listdir():
     if file.endswith(".xlsx"):
@@ -74,18 +84,18 @@ for file in os.listdir():
 
 merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
-# Step 6: Summary by Version → Issue Type
+# Step 8: Summary by Version → Issue Type
 print("\n📊 Summary by Version:")
 version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
 print(version_summary)
 
-# Step 7: Summary by Issue Type
+# Step 9: Summary by Issue Type
 print("\n📊 Summary by Issue Type:")
 issue_summary = merged_df["Issue Types"].value_counts().reset_index()
 issue_summary.columns = ["Issue Types", "Count"]
 print(issue_summary)
 
-# Step 8: User Input & Assignment
+# Step 10: User Input & Assignment
 issue_type_counts = merged_df["Issue Types"].value_counts()
 user_assignment = {}
 
@@ -103,7 +113,7 @@ for issue_type, count in issue_type_counts.items():
 
     user_assignment[issue_type] = users
 
-# Step 9: Correct Sequential Assignment Logic
+# Step 11: Correct Sequential Assignment Logic
 def assign_users(issue_type, df):
     users = user_assignment.get(issue_type, [])
     if not users:
@@ -122,13 +132,13 @@ merged_df["Assigned To"] = ""
 for issue_type in user_assignment.keys():
     merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
-# Step 10: Summary by Assigned User
+# Step 12: Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
 assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
 assigned_summary.columns = ["Assigned To", "Count"]
 print(assigned_summary)
 
-# Step 11: Split into Develop & Non-Develop
+# Step 13: Split into Develop & Non-Develop
 develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 
@@ -146,14 +156,14 @@ final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "
 develop_df = develop_df[final_columns]
 non_develop_df = non_develop_df[final_columns]
 
-# Step 12: Save Final Files
+# Step 14: Save Final Files
 develop_file = os.path.join(output_folder, f"Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 
 develop_df.to_excel(develop_file, index=False)
 non_develop_df.to_excel(non_develop_file, index=False)
 
-# Step 13: Cleanup Files and Kill Script
+# Step 15: Cleanup Files and Kill Script
 for file in os.listdir():
     if file.endswith(".xlsx") and file not in [develop_file, non_develop_file]:
         os.remove(file)
