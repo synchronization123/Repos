@@ -23,8 +23,8 @@ for file in os.listdir():
 # Combine all data into a single DataFrame
 merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
-# Standardize column names
-merged_df.columns = merged_df.columns.str.strip()
+# Normalize column names to lowercase for case-insensitive matching
+merged_df.columns = merged_df.columns.str.strip().str.lower()
 
 # Kill the dataframe to clear any fragments at the beginning
 merged_df = kill_dataframe(merged_df)
@@ -41,36 +41,36 @@ merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
 # Standardize Issue Type values before modifications
 issue_type_mapping = {
-    "Bug Security": "Security",
-    "Improvement-Technical Security": "Security",
-    "Bug": "Functional Bug",
-    "Story": "Epic Story"
+    "bug security": "security",
+    "improvement-technical security": "security",
+    "bug": "functional bug",
+    "story": "epic story"
 }
 
-# Apply Issue Type Mapping
-merged_df["Issue Type"] = merged_df["Issue Type"].replace(issue_type_mapping)
+# Apply Issue Type Mapping (case insensitive)
+merged_df["issue type"] = merged_df["issue type"].replace(issue_type_mapping)
 
 # Concatenate Issue Type with Security if applicable
-if "Security" in merged_df.columns:
-    merged_df["Issue Types"] = merged_df[["Issue Type", "Security"]].astype(str).agg(" ".join, axis=1).str.strip()
-    merged_df.drop(columns=["Security"], inplace=True)
+if "security" in merged_df.columns:
+    merged_df["issue types"] = merged_df[["issue type", "security"]].astype(str).agg(" ".join, axis=1).str.strip()
+    merged_df.drop(columns=["security"], inplace=True)
 else:
-    merged_df["Issue Types"] = merged_df["Issue Type"]
+    merged_df["issue types"] = merged_df["issue type"]
 
 # Handle NaN values for Issue Types
-missing_issue_types_count = merged_df["Issue Types"].isna().sum()
+missing_issue_types_count = merged_df["issue types"].isna().sum()
 
 # Step 4: Display summary for missing issue types
 if missing_issue_types_count > 0:
-    print(f"\n⚠️ Missing or malformed 'Issue Types': {missing_issue_types_count} rows")
+    print(f"\n⚠️ Missing or malformed 'issue types': {missing_issue_types_count} rows")
 
-# Step 5: Ensure no NaN values in "Issue Types" column
-merged_df["Issue Types"].fillna("Missing Issue Type", inplace=True)  # You can also leave it as NaN or "Unknown"
+# Step 5: Ensure no NaN values in "issue types" column
+merged_df["issue types"].fillna("missing issue type", inplace=True)  # You can also leave it as NaN or "unknown"
 
 # Convert Date fields
 current_date = datetime.now().strftime("%d-%b-%Y")
-merged_df["Date"] = current_date
-merged_df["Assigned On"] = current_date
+merged_df["date"] = current_date
+merged_df["assigned on"] = current_date
 
 # Step 6: Kill the dataframe to avoid fragmentation at this point
 merged_df = kill_dataframe(merged_df)
@@ -86,17 +86,17 @@ merged_df = pd.concat(merged_data, ignore_index=True).copy()
 
 # Step 8: Summary by Version → Issue Type
 print("\n📊 Summary by Version:")
-version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
+version_summary = merged_df.groupby(["version", "issue types"]).size().reset_index(name="count")
 print(version_summary)
 
 # Step 9: Summary by Issue Type
 print("\n📊 Summary by Issue Type:")
-issue_summary = merged_df["Issue Types"].value_counts().reset_index()
-issue_summary.columns = ["Issue Types", "Count"]
+issue_summary = merged_df["issue types"].value_counts().reset_index()
+issue_summary.columns = ["issue types", "count"]
 print(issue_summary)
 
 # Step 10: User Input & Assignment
-issue_type_counts = merged_df["Issue Types"].value_counts()
+issue_type_counts = merged_df["issue types"].value_counts()
 user_assignment = {}
 
 for issue_type, count in issue_type_counts.items():
@@ -123,42 +123,42 @@ def assign_users(issue_type, df):
     user_count = len(users)
     
     for i in range(len(df)):
-        df.at[i, "Assigned To"] = users[i // 30 % user_count]  
+        df.at[i, "assigned to"] = users[i // 30 % user_count]  
 
     return df
 
 # Apply assignment logic
-merged_df["Assigned To"] = ""
+merged_df["assigned to"] = ""
 for issue_type in user_assignment.keys():
-    merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
+    merged_df.loc[merged_df["issue types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["issue types"] == issue_type])
 
-# Check if 'Assigned To' is updated
-if merged_df["Assigned To"].isna().sum() > 0:
-    print(f"\n⚠️ There are {merged_df['Assigned To'].isna().sum()} rows with unassigned users.")
+# Ensure "assigned to" column is updated and populated
+if merged_df["assigned to"].isna().sum() > 0:
+    print(f"\n⚠️ There are {merged_df['assigned to'].isna().sum()} rows with unassigned users.")
 else:
     print("\n✅ All rows are correctly assigned to users.")
 
 # Step 12: Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
-assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
-assigned_summary.columns = ["Assigned To", "Count"]
+assigned_summary = merged_df["assigned to"].value_counts().reset_index()
+assigned_summary.columns = ["assigned to", "count"]
 print(assigned_summary)
 
 # Step 13: Split into Develop & Non-Develop
-develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
-non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+develop_df = merged_df[merged_df["version"].str.contains("develop", case=False, na=False)].copy()
+non_develop_df = merged_df[~merged_df["version"].str.contains("develop", case=False, na=False)].copy()
 
 # Drop rows with blank Versions in Non-Develop
-non_develop_df = non_develop_df[non_develop_df["Version"].notna()]
+non_develop_df = non_develop_df[non_develop_df["version"].notna()]
 
-# Check if the columns "Analyst Comments" and "Mentor Review" exist, else create them with default values
-if "Analyst Comments" not in non_develop_df.columns:
-    non_develop_df["Analyst Comments"] = ""
-if "Mentor Review" not in non_develop_df.columns:
-    non_develop_df["Mentor Review"] = ""
+# Check if the columns "analyst comments" and "mentor review" exist, else create them with default values
+if "analyst comments" not in non_develop_df.columns:
+    non_develop_df["analyst comments"] = ""
+if "mentor review" not in non_develop_df.columns:
+    non_develop_df["mentor review"] = ""
 
 # Arrange final columns
-final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback"]
+final_columns = ["date", "issue key", "issue types", "version", "assigned to", "status", "assigned on", "analyst comments", "mentor review", "feedback"]
 develop_df = develop_df[final_columns]
 non_develop_df = non_develop_df[final_columns]
 
