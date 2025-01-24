@@ -1,0 +1,142 @@
+import pandas as pd
+import os
+from datetime import datetime
+
+# Set the current date
+current_date = datetime.now().strftime("%d-%b-%Y")
+
+# Folder paths
+current_folder = os.getcwd()  # Current working directory
+
+# Create output folder if it doesn't exist
+output_folder = current_folder  # Saving in the same folder as the script
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+# Function to load all xlsx files from the current folder
+def load_xlsx_files(current_folder):
+    files = [f for f in os.listdir(current_folder) if f.endswith('.xlsx')]
+    return [pd.read_excel(os.path.join(current_folder, file)) for file in files]
+
+# Load all Excel files
+files = load_xlsx_files(current_folder)
+
+# Merge all data
+merged_data = pd.concat(files, ignore_index=True)
+
+# Add missing columns if not present
+missing_columns = ['Analyst Comments', 'Mentor review', 'Feedback']
+for col in missing_columns:
+    if col not in merged_data.columns:
+        merged_data[col] = ""
+
+# Concatenate 'Issue type' and 'Security' columns into 'Issue types' and then drop the 'Security' and 'Issue type' columns
+merged_data['Issue types'] = merged_data['Issue type'].fillna('') + ' ' + merged_data['Security'].fillna('')
+merged_data = merged_data.drop(columns=['Security', 'Issue type'])
+
+# Handle Issue type transformations
+merged_data['Issue types'] = merged_data['Issue types'].replace({"Security Bug": "Security"})  # Rename "Security Bug" to "Security"
+
+# Create a summary by 'Issue types'
+issue_type_summary = merged_data['Issue types'].value_counts()
+
+# Print the summary
+print("Summary by Issue Type:")
+print(issue_type_summary)
+
+# Prompt user for users to assign to each issue type
+issue_types = issue_type_summary.index.tolist()
+assignments = {}
+
+for issue_type in issue_types:
+    users_input = input(f"Enter users for issue type '{issue_type}' (comma separated): ")
+    users = users_input.split(',')
+    assignments[issue_type] = [user.strip() for user in users]
+
+# Function to assign users to issues, ensuring no user gets more than 30 tasks
+def assign_users_sequential(issue_type, assignments, max_tasks_per_user=30):
+    users = assignments.get(issue_type, [])
+    total_tasks = issue_type_summary.get(issue_type, 0)
+    users_count = len(users)
+
+    if users_count == 0:
+        return []
+
+    # Ensure that each user gets at most 30 tasks
+    task_assignment = []
+    user_idx = 0  # Start from the first user
+    for task in range(total_tasks):
+        task_assignment.append(users[user_idx])
+        user_idx = (user_idx + 1) % users_count
+        if task_assignment.count(users[user_idx]) >= max_tasks_per_user:
+            # If a user reaches their limit, skip them and move to the next one
+            user_idx = (user_idx + 1) % users_count
+    return task_assignment
+
+# Assign users to 'Assigned to' column (sequentially with a max of 30 tasks per user)
+merged_data['Assigned to'] = merged_data['Issue types'].map(lambda issue: assign_users_sequential(issue, assignments))
+
+# Ensure no duplicate names in 'Assigned to' and assign users sequentially
+def clean_assigned_to(assigned_to):
+    if isinstance(assigned_to, str):
+        assigned_to = assigned_to.split(', ')  # Split into a list if it's a string
+    assigned_to = list(set(assigned_to))  # Remove duplicates
+    return ', '.join(assigned_to)  # Join back into a string for the cell
+
+merged_data['Assigned to'] = merged_data['Assigned to'].apply(clean_assigned_to)
+
+# Format columns as per the requested order
+merged_data['Assigned On'] = current_date
+merged_data['Date'] = current_date
+
+final_columns = [
+    'Date', 'Issue key', 'Issue types', 'Version', 'Assigned to', 'Status', 
+    'Assigned On', 'Analyst Comments', 'Mentor review', 'Feedback'
+]
+merged_data = merged_data[final_columns]
+
+# Save merged data as Final_jiras_yyyy-mm-dd.xlsx
+merged_data_path = os.path.join(output_folder, f"Final_jiras_{current_date}.xlsx")
+merged_data.to_excel(merged_data_path, index=False)
+print(f"Final merged file saved: {merged_data_path}")
+
+# Separate into Develop and Non-Develop sheets based on 'Version' column
+develop_data = merged_data[merged_data['Version'].str.contains("develop", case=False, na=False)]
+non_develop_data = merged_data[~merged_data['Version'].str.contains("develop", case=False, na=False)]
+
+# Delete 'develop' issues from the non-develop file
+non_develop_data = non_develop_data[~non_develop_data['Issue types'].str.contains("develop", case=False, na=False)]
+
+# Ensure no duplicates in 'Assigned to' column
+develop_data['Assigned to'] = develop_data['Assigned to'].apply(clean_assigned_to)
+non_develop_data['Assigned to'] = non_develop_data['Assigned to'].apply(clean_assigned_to)
+
+# Save Develop and Non-Develop files
+develop_file_path = os.path.join(output_folder, f"Develop_jiras_{current_date}.xlsx")
+non_develop_file_path = os.path.join(output_folder, f"Non_Develop_jiras_{current_date}.xlsx")
+develop_data.to_excel(develop_file_path, index=False)
+non_develop_data.to_excel(non_develop_file_path, index=False)
+
+print(f"Develop file saved: {develop_file_path}")
+print(f"Non-Develop file saved: {non_develop_file_path}")
+
+# Delete intermediate files except Develop and Non-Develop
+intermediate_files = [
+    "Merged.xlsx", "Concatenate.xlsx", f"Final_jiras_{current_date}.xlsx"
+]
+for file in intermediate_files:
+    file_path = os.path.join(output_folder, file)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"Deleted: {file_path}")
+
+# Rename "Security Bug" to "Security" in 'Develop' and 'Non-Develop' output files
+develop_data['Issue types'] = develop_data['Issue types'].replace({"Security Bug": "Security"})
+non_develop_data['Issue types'] = non_develop_data['Issue types'].replace({"Security Bug": "Security"})
+
+# Save the final Develop and Non-Develop files after renaming
+develop_data.to_excel(develop_file_path, index=False)
+non_develop_data.to_excel(non_develop_file_path, index=False)
+
+print(f"Final Develop file after rename: {develop_file_path}")
+print(f"Final Non-Develop file after rename: {non_develop_file_path}")
