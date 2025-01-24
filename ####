@@ -1,12 +1,13 @@
 import os
 import pandas as pd
 from datetime import datetime
+import sys
 
 # Ensure output folder exists
 output_folder = "data/output"
 os.makedirs(output_folder, exist_ok=True)
 
-# Merge all XLSX files in the folder
+# Step 1: Load and Merge Files
 merged_data = []
 for file in os.listdir():
     if file.endswith(".xlsx"):
@@ -30,10 +31,10 @@ issue_type_mapping = {
 # Apply Issue Type Mapping
 merged_df["Issue Type"] = merged_df["Issue Type"].replace(issue_type_mapping)
 
-# Concatenate Issue Type with Security (if applicable)
+# Concatenate Issue Type with Security if applicable
 if "Security" in merged_df.columns:
     merged_df["Issue Types"] = merged_df[["Issue Type", "Security"]].astype(str).agg(" ".join, axis=1).str.strip()
-    merged_df = merged_df.drop(columns=["Security"])
+    merged_df.drop(columns=["Security"], inplace=True)
 else:
     merged_df["Issue Types"] = merged_df["Issue Type"]
 
@@ -42,23 +43,26 @@ current_date = datetime.now().strftime("%d-%b-%Y")
 merged_df["Date"] = current_date
 merged_df["Assigned On"] = current_date
 
-# Summary by Version → Issue Type
+# Step 2: Remove Fragmentation (Ensure Clean Copy)
+merged_df = merged_df.copy()
+
+# Step 3: Summary by Version → Issue Type
 print("\n📊 Summary by Version:")
 version_summary = merged_df.groupby(["Version", "Issue Types"]).size().reset_index(name="Count")
 print(version_summary)
 
-# Summary by Issue Type
+# Step 4: Summary by Issue Type
 print("\n📊 Summary by Issue Type:")
 issue_summary = merged_df["Issue Types"].value_counts().reset_index()
 issue_summary.columns = ["Issue Types", "Count"]
 print(issue_summary)
 
-# Prompt for user assignment based on Issue Type count
+# Step 5: User Input & Assignment
 issue_type_counts = merged_df["Issue Types"].value_counts()
 user_assignment = {}
 
 for issue_type, count in issue_type_counts.items():
-    num_users_required = max(1, count // 30)  # Ensure at least 1 user
+    num_users_required = max(1, count // 30)  
     print(f"\n📝 Issue Type: {issue_type} → {count} issues found.")
     print(f"Suggested: Enter at least {num_users_required} users (30 issues per user).")
 
@@ -71,17 +75,17 @@ for issue_type, count in issue_type_counts.items():
 
     user_assignment[issue_type] = users
 
-# Sequential assignment logic (no round-robin)
+# Step 6: Correct Sequential Assignment Logic
 def assign_users(issue_type, df):
     users = user_assignment.get(issue_type, [])
     if not users:
-        return df  # No assignment needed
+        return df  
 
-    df = df.copy()  # Avoid modifying original DataFrame
+    df = df.copy()
     user_count = len(users)
     
     for i in range(len(df)):
-        df.at[i, "Assigned To"] = users[i // 30 % user_count]  # Assign sequentially (30 per user)
+        df.at[i, "Assigned To"] = users[i // 30 % user_count]  
 
     return df
 
@@ -90,13 +94,13 @@ merged_df["Assigned To"] = ""
 for issue_type in user_assignment.keys():
     merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
-# Summary by Assigned User
+# Step 7: Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
 assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
 assigned_summary.columns = ["Assigned To", "Count"]
 print(assigned_summary)
 
-# Split into Develop & Non-Develop
+# Step 8: Split into Develop & Non-Develop
 develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
 
@@ -108,14 +112,14 @@ final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "
 develop_df = develop_df[final_columns]
 non_develop_df = non_develop_df[final_columns]
 
-# Save final Develop & Non-Develop files
+# Step 9: Save Final Files
 develop_file = os.path.join(output_folder, f"Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{datetime.now().strftime('%Y-%m-%d')}.xlsx")
 
 develop_df.to_excel(develop_file, index=False)
 non_develop_df.to_excel(non_develop_file, index=False)
 
-# Clean up intermediate files
+# Step 10: Cleanup Files and Kill Script
 for file in os.listdir():
     if file.endswith(".xlsx") and file not in [develop_file, non_develop_file]:
         os.remove(file)
@@ -123,3 +127,6 @@ for file in os.listdir():
 print("\n✅ Process Completed Successfully!")
 print(f"📂 Develop File: {develop_file}")
 print(f"📂 Non-Develop File: {non_develop_file}")
+
+# Kill the script to free memory
+sys.exit()
