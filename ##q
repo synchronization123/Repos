@@ -1,0 +1,92 @@
+import os
+import pandas as pd
+from datetime import datetime
+
+# Define directories
+input_folder = "./"  # Current directory
+output_folder = "data/output"
+
+# Ensure output directory exists
+os.makedirs(output_folder, exist_ok=True)
+
+# Merge all xlsx files in the folder
+all_files = [f for f in os.listdir(input_folder) if f.endswith(".xlsx")]
+merged_data = pd.DataFrame()
+
+for file in all_files:
+    df = pd.read_excel(os.path.join(input_folder, file), engine="openpyxl")
+    df.columns = df.columns.str.strip()  # Remove leading/trailing spaces in column names
+    merged_data = pd.concat([merged_data, df], ignore_index=True)
+
+# Save merged file
+merged_file_path = os.path.join(output_folder, "Merged.xlsx")
+merged_data.to_excel(merged_file_path, index=False)
+print(f"Merged file saved: {merged_file_path}")
+
+# Define required columns
+required_columns = ["Date", "Issue key", "Issue type", "Version", "Assigned to", "Status", 
+                    "Assigned On", "Analyst Comments", "Mentor review", "Feedback"]
+
+# Ensure all required columns exist (fill missing with default values)
+for col in required_columns:
+    if col not in merged_data.columns:
+        merged_data[col] = ""
+
+# Reorder columns
+merged_data = merged_data[required_columns]
+
+# If "Security" column exists, update "Issue type" and remove it
+if "Security" in merged_data.columns:
+    security_mask = merged_data["Security"].str.contains("Security", na=False, case=False)
+    merged_data.loc[security_mask, "Issue type"] = "Security - " + merged_data.loc[security_mask, "Issue type"]
+    merged_data.drop(columns=["Security"], inplace=True)
+
+# Rename issue types (after security updates)
+merged_data["Issue type"] = merged_data["Issue type"].replace(
+    {"story": "Epic/Story", "bug": "Functional bug"}
+)
+
+# Ensure "Version" column retains correct values after merging
+merged_data["Version"] = merged_data.groupby(["Issue key"])["Version"].ffill()
+
+# Show summary of Issue types
+summary = merged_data["Issue type"].value_counts()
+print("\nSummary of Issue Types:")
+for issue, count in summary.items():
+    print(f"{issue}: {count}")
+
+# Prompt for user assignments per Issue Type (optional)
+issue_type_users = {}
+for issue_type in summary.index:
+    user_input = input(f"Enter comma-separated users for issue type '{issue_type}' (leave blank to skip): ").strip()
+    if user_input:
+        issue_type_users[issue_type] = [user.strip() for user in user_input.split(",")]
+    else:
+        issue_type_users[issue_type] = []  # No users assigned
+
+# Assign users equally per Issue Type
+for issue_type, users in issue_type_users.items():
+    if users:  # Only assign users if provided
+        user_count = len(users)
+        issue_rows = merged_data[merged_data["Issue type"] == issue_type].index
+        for i, row in enumerate(issue_rows):
+            merged_data.at[row, "Assigned to"] = users[i % user_count]
+
+# Save final file
+current_date = datetime.now().strftime("%Y-%m-%d")
+final_file_path = os.path.join(output_folder, f"Final_jiras_{current_date}.xlsx")
+merged_data.to_excel(final_file_path, index=False)
+print(f"Final file saved: {final_file_path}")
+
+# Split based on "Version"
+develop_file = merged_data[merged_data["Version"].str.contains("%develop%", na=False)]
+non_develop_file = merged_data[~merged_data["Version"].str.contains("%develop%", na=False)]
+
+develop_file_path = os.path.join(output_folder, f"Develop_jiras_{current_date}.xlsx")
+non_develop_file_path = os.path.join(output_folder, f"Non_Develop_jiras_{current_date}.xlsx")
+
+develop_file.to_excel(develop_file_path, index=False)
+non_develop_file.to_excel(non_develop_file_path, index=False)
+
+print(f"Develop file saved: {develop_file_path}")
+print(f"Non-Develop file saved: {non_develop_file_path}")
