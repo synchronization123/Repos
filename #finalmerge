@@ -1,0 +1,140 @@
+import os
+import pandas as pd
+from datetime import datetime
+
+# Define directories
+input_folder = "./"  # Current directory
+output_folder = "data/output"
+os.makedirs(output_folder, exist_ok=True)  # Ensure output directory exists
+
+# Merge all xlsx files in the folder
+all_files = [f for f in os.listdir(input_folder) if f.endswith(".xlsx")]
+merged_data = pd.DataFrame()
+
+for file in all_files:
+    df = pd.read_excel(os.path.join(input_folder, file), engine="openpyxl")
+    df.columns = df.columns.str.strip()  # Remove leading/trailing spaces in column names
+    merged_data = pd.concat([merged_data, df], ignore_index=True)
+
+# Save merged file before concatenation
+merged_file_path = os.path.join(output_folder, "Merged.xlsx")
+merged_data.to_excel(merged_file_path, index=False)
+print(f"Merged file saved: {merged_file_path}")
+
+# Define required columns
+required_columns = ["Date", "Issue key", "Issue type", "Version", "Assigned to", "Status",
+                    "Assigned On", "Analyst Comments", "Mentor review", "Feedback", "Security"]
+
+# Ensure all required columns exist (fill missing with default values)
+for col in required_columns:
+    if col not in merged_data.columns:
+        merged_data[col] = ""
+
+# Reorder columns
+merged_data = merged_data[required_columns]
+
+# Fill missing Issue Type before concatenation
+merged_data["Issue type"] = merged_data["Issue type"].fillna("Unknown")
+
+# Concatenate Issue type and Security columns into a new "Issue types" column
+merged_data["Issue types"] = merged_data.apply(
+    lambda row: f"{row['Issue type']} {row['Security']}".strip() if pd.notna(row["Security"]) and row["Security"] else row["Issue type"],
+    axis=1
+)
+
+# Drop the original "Issue type" and "Security" columns
+merged_data.drop(columns=["Issue type", "Security"], inplace=True)
+
+# Save the Concatenate.xlsx file before final processing
+concatenate_file_path = os.path.join(output_folder, "Concatenate.xlsx")
+merged_data.to_excel(concatenate_file_path, index=False)
+print(f"Concatenate file saved: {concatenate_file_path}")
+
+# Rename issue types AFTER concatenation
+merged_data["Issue types"] = merged_data["Issue types"].replace({
+    "story": "Epic/Story",
+    "bug": "Functional Bug"
+})
+
+# Ensure "Version" column retains correct values after merging
+merged_data["Version"] = merged_data.groupby(["Issue key"])["Version"].ffill()
+
+# Show summary of Issue types
+summary = merged_data["Issue types"].value_counts()
+print("\nSummary of Issue Types:")
+for issue, count in summary.items():
+    print(f"{issue}: {count}")
+
+# Prompt for user assignments per Issue Type (serial distribution)
+issue_type_users = {}
+assigned_users = {}
+
+for issue_type in summary.index:
+    user_input = input(f"Enter comma-separated users for issue type '{issue_type}' (leave blank to skip): ").strip()
+    users = [user.strip() for user in user_input.split(",")] if user_input else []
+    issue_type_users[issue_type] = users
+    assigned_users[issue_type] = []  # Track user assignment count
+
+# Assign users serially, ensuring 30 issues per user max
+for issue_type, users in issue_type_users.items():
+    if users:
+        user_index = 0
+        issue_rows = merged_data[merged_data["Issue types"] == issue_type].index
+        for i, row in enumerate(issue_rows):
+            user = users[user_index]
+            if assigned_users[issue_type].count(user) < 30:  # Ensure max 30 issues per user
+                merged_data.at[row, "Assigned to"] = user
+                assigned_users[issue_type].append(user)
+            else:
+                user_index = (user_index + 1) % len(users)  # Move to next user
+                merged_data.at[row, "Assigned to"] = users[user_index]
+                assigned_users[issue_type].append(users[user_index])
+
+# Format Date and Assigned On columns
+current_date = datetime.now().strftime("%d-%b-%Y")
+merged_data["Date"] = current_date
+merged_data["Assigned On"] = current_date
+
+# Reorder columns as requested
+final_columns = [
+    "Date", "Issue key", "Issue types", "Version", "Assigned to", "Status",
+    "Assigned On", "Analyst Comments", "Mentor review", "Feedback"
+]
+merged_data = merged_data[final_columns]
+
+# Save final file
+final_file_path = os.path.join(output_folder, f"Final_jiras_{current_date}.xlsx")
+merged_data.to_excel(final_file_path, index=False)
+print(f"Final file saved: {final_file_path}")
+
+# Split based on "Version" containing "develop"
+develop_file = merged_data[merged_data["Version"].str.contains("develop", na=False, case=False)]
+non_develop_file = merged_data[~merged_data["Version"].str.contains("develop", na=False, case=False)]
+
+# Ensure Issue Type is not blank in Develop & Non-Develop files using .loc
+develop_file.loc[:, "Issue types"] = develop_file["Issue types"].fillna("Unknown")
+non_develop_file.loc[:, "Issue types"] = non_develop_file["Issue types"].fillna("Unknown")
+
+# Reorder columns for Develop and Non-Develop files
+develop_file = develop_file[final_columns]
+non_develop_file = non_develop_file[final_columns]
+
+# Save the Develop and Non-Develop files
+develop_file_path = os.path.join(output_folder, f"Develop_jiras_{current_date}.xlsx")
+non_develop_file_path = os.path.join(output_folder, f"Non_Develop_jiras_{current_date}.xlsx")
+
+develop_file.to_excel(develop_file_path, index=False)
+non_develop_file.to_excel(non_develop_file_path, index=False)
+
+print(f"Develop file saved: {develop_file_path}")
+print(f"Non-Develop file saved: {non_develop_file_path}")
+
+# Cleanup: Delete unnecessary intermediate files, keeping only Develop and Non-Develop files
+intermediate_files = [
+    "Merged.xlsx", "Concatenate.xlsx", f"Final_jiras_{current_date}.xlsx"
+]
+for file in intermediate_files:
+    file_path = os.path.join(output_folder, file)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"Deleted: {file_path}")
