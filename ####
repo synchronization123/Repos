@@ -58,17 +58,18 @@ for issue_type, count in issue_type_counts.items():
 
     # Ensure the user count matches the suggested number
     if len(users) < num_users:
-        print(f"Warning: You need to input at least {num_users} users. Adding placeholders.")
-        users.extend([f"User{i+1}" for i in range(num_users - len(users))])
-
-    user_assignments[issue_type] = deque(users)  # Round-robin assignment
+        print(f"Warning: You need to input at least {num_users} users. Assigning users equally among {len(users)} entered users.")
+        user_assignments[issue_type] = users  # Assign users equally
+    else:
+        user_assignments[issue_type] = deque(users)  # Round-robin assignment
 
 # Step 5: Assign users in a sequential manner (30 per user)
 assigned_users = []
 for _, row in merged_df.iterrows():
     issue_type = row["Issue Types"]
     if issue_type in user_assignments and user_assignments[issue_type]:
-        assigned_user = user_assignments[issue_type].popleft()
+        # Assign users equally if less than required users
+        assigned_user = user_assignments[issue_type].pop(0)
         assigned_users.append(assigned_user)
         user_assignments[issue_type].append(assigned_user)  # Rotate users
     else:
@@ -114,9 +115,8 @@ for f in files:
     os.remove(f)
 
 # Step 10: Display Summary by Version and Assigned To
-print("\nSummary by Version:")
-version_summary = merged_df["Version"].value_counts().reset_index()
-version_summary.columns = ["Version", "Count"]
+print("\nSummary by Version (Grouped by Issue Type):")
+version_summary = merged_df.groupby(['Version', 'Issue Types']).size().reset_index(name='Count')
 print(version_summary.to_string(index=False))
 
 print("\nSummary by Assigned To:")
