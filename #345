@@ -1,0 +1,107 @@
+import os
+import pandas as pd
+from datetime import datetime
+from collections import deque
+
+# Ensure output folder exists
+output_folder = "data/output"
+os.makedirs(output_folder, exist_ok=True)
+
+# Get today's date in required format
+today_date = datetime.today().strftime("%d-%b-%Y")
+
+# Merge all Excel files in the folder
+files = [f for f in os.listdir() if f.endswith(".xlsx") and not f.startswith("~$")]
+df_list = [pd.read_excel(f, dtype=str) for f in files]
+merged_df = pd.concat(df_list, ignore_index=True)
+
+# Ensure required columns exist
+required_columns = ["Date", "Issue Key", "Issue Type", "Version", "Assigned To", 
+                    "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback", "Security"]
+
+# Fill missing columns if any
+for col in required_columns:
+    if col not in merged_df.columns:
+        merged_df[col] = ""
+
+# First, update "Issue Type" column based on "Security" column presence
+merged_df.loc[merged_df["Security"].str.contains("Security", na=False, case=False), "Issue Type"] = "Security"
+
+# Now, apply other renaming rules for Issue Type
+issue_type_mapping = {
+    "Bug Security": "Security",
+    "Bug": "Functional Bug",
+    "Story": "Epic Story"
+}
+merged_df["Issue Type"] = merged_df["Issue Type"].replace(issue_type_mapping)
+
+# Drop Security column after processing
+merged_df.drop(columns=["Security"], inplace=True)
+
+# Display issue type summary correctly
+print("\nSummary by Issue Type:")
+issue_type_summary = merged_df["Issue Type"].value_counts().reset_index()
+issue_type_summary.columns = ["Issue Type", "Count"]
+print(issue_type_summary.to_string(index=False))
+
+# Prompt for user assignment by Issue Type
+user_assignments = {}
+for issue_type in merged_df["Issue Type"].unique():
+    users_input = input(f"Enter comma-separated users for issue type '{issue_type}': ")
+    users = [u.strip() for u in users_input.split(",") if u.strip()]
+    user_assignments[issue_type] = deque(users)  # Using deque for round-robin assignment
+
+# Assign users in a round-robin manner (30 per user if more)
+assigned_users = []
+for _, row in merged_df.iterrows():
+    issue_type = row["Issue Type"]
+    if issue_type in user_assignments and user_assignments[issue_type]:
+        assigned_user = user_assignments[issue_type].popleft()
+        assigned_users.append(assigned_user)
+        user_assignments[issue_type].append(assigned_user)  # Rotate users
+    else:
+        assigned_users.append("Unassigned")
+
+merged_df["Assigned To"] = assigned_users
+
+# Ensure versioning is correctly assigned
+merged_df["Version"] = merged_df["Version"].fillna("")
+
+# Split into Develop and Non-Develop DataFrames
+develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+
+# Remove blank version rows from non-develop
+non_develop_df = non_develop_df[non_develop_df["Version"].str.strip() != ""]
+
+# Arrange columns as per required format
+column_order = ["Date", "Issue Key", "Issue Type", "Version", "Assigned To", 
+                "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback"]
+
+develop_df = develop_df[column_order]
+non_develop_df = non_develop_df[column_order]
+
+# Fill missing dates with today's date
+develop_df["Date"] = today_date
+develop_df["Assigned On"] = today_date
+non_develop_df["Date"] = today_date
+non_develop_df["Assigned On"] = today_date
+
+# Rename "Bug Security" → "Security" in final develop & non-develop files
+develop_df["Issue Type"] = develop_df["Issue Type"].replace("Bug Security", "Security")
+non_develop_df["Issue Type"] = non_develop_df["Issue Type"].replace("Bug Security", "Security")
+
+# Save output files
+develop_file = os.path.join(output_folder, f"Develop_jiras_{datetime.today().strftime('%Y-%m-%d')}.xlsx")
+non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{datetime.today().strftime('%Y-%m-%d')}.xlsx")
+
+develop_df.to_excel(develop_file, index=False)
+non_develop_df.to_excel(non_develop_file, index=False)
+
+# Delete unnecessary intermediate files
+for f in files:
+    os.remove(f)
+
+print("\nProcessing complete. Files saved:")
+print(f"- {develop_file}")
+print(f"- {non_develop_file}")
