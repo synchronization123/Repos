@@ -1,0 +1,96 @@
+import pandas as pd
+import os
+from datetime import datetime
+
+# Helper function to clean 'Assigned to' column
+def clean_assigned_to(assigned_to):
+    if isinstance(assigned_to, str):
+        assigned_to = assigned_to.split(', ')  # Split into a list if it's a string
+    assigned_to = list(set(assigned_to))  # Remove duplicates
+    return ', '.join(assigned_to)  # Join back into a string for the cell
+
+# Function to process and merge the Excel files
+def process_excel_files(folder_path):
+    # Get all Excel files in the folder
+    xlsx_files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx')]
+    
+    all_data = []
+    
+    # Process each Excel file
+    for file in xlsx_files:
+        file_path = os.path.join(folder_path, file)
+        df = pd.read_excel(file_path)
+
+        # If 'Security' column exists, concatenate 'Security' and 'Issue type' columns
+        if 'Security' in df.columns:
+            df['Issue Types'] = df['Issue type'].fillna('') + ' ' + df['Security'].fillna('')
+            df.drop(columns=['Security'], inplace=True)
+        
+        # Replace 'Issue type' with correct values
+        df['Issue Types'] = df['Issue Types'].replace({
+            'story': 'Epic/Story',
+            'bug': 'Functional Bug',
+        })
+
+        # Clean 'Assigned to' column by removing duplicates and empty spaces
+        df['Assigned to'] = df['Assigned to'].apply(clean_assigned_to)
+        
+        # Append to all_data
+        all_data.append(df)
+    
+    # Merge all dataframes into one
+    merged_data = pd.concat(all_data, ignore_index=True)
+    
+    # Current Date format for use in filenames and columns
+    current_date = datetime.now().strftime('%d-%b-%Y')
+
+    # Set up columns arrangement in merged file
+    merged_data['Date'] = current_date
+    merged_data['Assigned On'] = current_date
+    merged_data['Status'] = merged_data['Status'].fillna('Unknown')
+    
+    # Correct 'Version' column based on the 'Issue Types' column and filter for 'develop' and 'non-develop'
+    develop_data = merged_data[merged_data['Version'].str.contains('develop', na=False)]
+    non_develop_data = merged_data[~merged_data['Version'].str.contains('develop', na=False)]
+    
+    # Remove duplicates from 'Assigned to' column
+    develop_data['Assigned to'] = develop_data['Assigned to'].apply(clean_assigned_to)
+    non_develop_data['Assigned to'] = non_develop_data['Assigned to'].apply(clean_assigned_to)
+
+    # Prompt for users to assign to each issue type
+    issue_types = merged_data['Issue Types'].unique()
+    for issue_type in issue_types:
+        users_input = input(f"Enter comma-separated users for Issue Type: {issue_type}: ")
+        users = [user.strip() for user in users_input.split(',')]
+        
+        # Assign users equally to 'Assigned to' column with threshold per user
+        issue_data = merged_data[merged_data['Issue Types'] == issue_type]
+        total_users = len(users)
+        user_index = 0
+        
+        for index, row in issue_data.iterrows():
+            if row['Assigned to'] == 'Unknown':
+                merged_data.at[index, 'Assigned to'] = users[user_index]
+                user_index = (user_index + 1) % total_users  # Round-robin assignment
+
+    # Saving final merged data into Excel files
+    output_folder = 'data/output'
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Save the final 'Develop' and 'Non-Develop' data
+    develop_data.to_excel(os.path.join(output_folder, f"Develop_jiras_{current_date}.xlsx"), index=False)
+    non_develop_data.to_excel(os.path.join(output_folder, f"Non_Develop_jiras_{current_date}.xlsx"), index=False)
+    
+    # Delete all other temporary files except the final develop and non-develop files
+    temp_files = [file for file in os.listdir(folder_path) if file not in [f"Develop_jiras_{current_date}.xlsx", f"Non_Develop_jiras_{current_date}.xlsx"]]
+    
+    for temp_file in temp_files:
+        os.remove(os.path.join(folder_path, temp_file))
+
+    print("Process completed successfully! Final files are saved in 'data/output'.")
+
+# Specify the folder where the Excel files are stored
+folder_path = 'path_to_your_folder_with_excel_files'
+
+# Run the process
+process_excel_files(folder_path)
