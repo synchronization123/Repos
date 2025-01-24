@@ -1,31 +1,105 @@
+import os
 import pandas as pd
 from datetime import datetime
+from collections import deque
 
-# Step 1: Input Version and Load the Excel File
-version = input("Enter the version name: ")
+# Ensure output folder exists
+output_folder = "data/output"
+os.makedirs(output_folder, exist_ok=True)
 
-# Step 2: Load the Excel File
-input_file = 'Filtered_JiraData.xlsx'
-df = pd.read_excel(input_file)
+# Get today's date in required format
+today_date = datetime.today().strftime("%d-%b-%Y")
+file_date = datetime.today().strftime("%Y-%m-%d")
 
-# Step 3: Filter columns - Keep only 'Issue key', 'Issue Type', 'Security'
-df = df[['Issue key', 'Issue Type', 'Security']]
+# Step 1: Merge all Excel files
+files = [f for f in os.listdir() if f.endswith(".xlsx") and not f.startswith("~$")]
+df_list = [pd.read_excel(f, dtype=str) for f in files]
+merged_df = pd.concat(df_list, ignore_index=True)
 
-# Step 4: Add additional columns with required data
-current_date = datetime.today().strftime('%Y-%m-%d')
-df['Date'] = current_date
-df['version'] = version
-df['Status'] = 'Pending'
-df['Assigned on'] = current_date
-df['Analyst comments'] = ''
-df['Mentor review'] = 'Pending'
-df['Feedback'] = ''
+# Save Merged File
+merged_file = os.path.join(output_folder, "merged.xlsx")
+merged_df.to_excel(merged_file, index=False)
 
-# Step 5: Arrange columns in the desired order
-df = df[['Date', 'Issue key', 'Issue Type', 'version', 'Status', 'Assigned on', 'Analyst comments', 'Mentor review', 'Feedback']]
+# Ensure required columns exist
+required_columns = ["Date", "Issue Key", "Issue Type", "Version", "Assigned To", 
+                    "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback", "Security"]
 
-# Step 6: Save the DataFrame to a new Excel file
-output_file = f"{version}.xlsx"
-df.to_excel(output_file, index=False)
+for col in required_columns:
+    if col not in merged_df.columns:
+        merged_df[col] = ""
 
-print(f"File saved successfully as {output_file}")
+# Step 2: Concatenate `Issue Type` and `Security` into `Issue Types` and remove original columns
+merged_df["Issue Types"] = merged_df["Issue Type"].fillna("") + " " + merged_df["Security"].fillna("")
+merged_df["Issue Types"] = merged_df["Issue Types"].str.strip().replace({"Bug Security": "Security"})  # Fix naming
+merged_df.drop(columns=["Issue Type", "Security"], inplace=True)
+
+# Save Concatenated File
+concatenated_file = os.path.join(output_folder, "concatenated.xlsx")
+merged_df.to_excel(concatenated_file, index=False)
+
+# Step 3: Display Issue Type Summary
+print("\nSummary by Issue Type:")
+issue_type_summary = merged_df["Issue Types"].value_counts().reset_index()
+issue_type_summary.columns = ["Issue Type", "Count"]
+print(issue_type_summary.to_string(index=False))
+
+# Step 4: Prompt for user assignment by Issue Type
+user_assignments = {}
+for issue_type in merged_df["Issue Types"].unique():
+    users_input = input(f"Enter comma-separated users for issue type '{issue_type}': ")
+    users = [u.strip() for u in users_input.split(",") if u.strip()]
+    user_assignments[issue_type] = deque(users)  # Round-robin assignment
+
+# Assign users in a sequential manner (30 per user)
+assigned_users = []
+for _, row in merged_df.iterrows():
+    issue_type = row["Issue Types"]
+    if issue_type in user_assignments and user_assignments[issue_type]:
+        assigned_user = user_assignments[issue_type].popleft()
+        assigned_users.append(assigned_user)
+        user_assignments[issue_type].append(assigned_user)  # Rotate users
+    else:
+        assigned_users.append("Unassigned")
+
+merged_df["Assigned To"] = assigned_users
+
+# Ensure correct versioning
+merged_df["Version"] = merged_df["Version"].fillna("")
+
+# Step 5: Split into Develop and Non-Develop
+develop_df = merged_df[merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=False, na=False)].copy()
+
+# Remove blank version rows from non-develop
+non_develop_df = non_develop_df[non_develop_df["Version"].str.strip() != ""]
+
+# Arrange columns
+column_order = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", 
+                "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback"]
+
+develop_df = develop_df[column_order]
+non_develop_df = non_develop_df[column_order]
+
+# Fill missing dates
+develop_df["Date"] = today_date
+develop_df["Assigned On"] = today_date
+non_develop_df["Date"] = today_date
+non_develop_df["Assigned On"] = today_date
+
+# Step 6: Save Final Files
+develop_file = os.path.join(output_folder, f"Develop_jiras_{file_date}.xlsx")
+non_develop_file = os.path.join(output_folder, f"Non_Develop_jiras_{file_date}.xlsx")
+
+develop_df.to_excel(develop_file, index=False)
+non_develop_df.to_excel(non_develop_file, index=False)
+
+# Step 7: Cleanup - Delete Intermediate Files
+os.remove(merged_file)
+os.remove(concatenated_file)
+
+for f in files:
+    os.remove(f)
+
+print("\nProcessing complete. Files saved:")
+print(f"- {develop_file}")
+print(f"- {non_develop_file}")
