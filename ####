@@ -132,6 +132,12 @@ merged_df["Assigned To"] = ""
 for issue_type in user_assignment.keys():
     merged_df.loc[merged_df["Issue Types"] == issue_type, :] = assign_users(issue_type, merged_df[merged_df["Issue Types"] == issue_type])
 
+# Check if 'Assigned To' is updated
+if merged_df["Assigned To"].isna().sum() > 0:
+    print(f"\n⚠️ There are {merged_df['Assigned To'].isna().sum()} rows with unassigned users.")
+else:
+    print("\n✅ All rows are correctly assigned to users.")
+
 # Step 12: Summary by Assigned User
 print("\n📊 Summary by Assigned User:")
 assigned_summary = merged_df["Assigned To"].value_counts().reset_index()
