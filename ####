@@ -135,6 +135,12 @@ non_develop_df = merged_df[~merged_df["Version"].str.contains("develop", case=Fa
 # Drop rows with blank Versions in Non-Develop
 non_develop_df = non_develop_df[non_develop_df["Version"].notna()]
 
+# Check if the columns "Analyst Comments" and "Mentor Review" exist, else create them with default values
+if "Analyst Comments" not in non_develop_df.columns:
+    non_develop_df["Analyst Comments"] = ""
+if "Mentor Review" not in non_develop_df.columns:
+    non_develop_df["Mentor Review"] = ""
+
 # Arrange final columns
 final_columns = ["Date", "Issue Key", "Issue Types", "Version", "Assigned To", "Status", "Assigned On", "Analyst Comments", "Mentor Review", "Feedback"]
 develop_df = develop_df[final_columns]
