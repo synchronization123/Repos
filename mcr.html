@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Findings Table</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+            overflow-x: hidden; /* Prevent horizontal scrollbar on main page */
+        }
+        .container-fluid {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 100%;
+        }
+        .filter-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1000;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .table-container {
+            max-height: 400px; /* Adjust table height */
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+        .table {
+            width: 100%;
+            min-width: 800px;
+            margin-bottom: 0;
+            table-layout: fixed; /* Fix column width */
+        }
+        .table th, .table td {
+            word-wrap: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .table th {
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+        }
+        .table td {
+            padding: 8px;
+        }
+        .btn-edit {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .btn-close {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-edit:hover, .btn-close:hover {
+            opacity: 0.85;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        /* Fixed width for each column */
+        .table td:nth-child(1), .table th:nth-child(1) {
+            width: 15%;
+        }
+        .table td:nth-child(2), .table th:nth-child(2) {
+            width: 12%;
+        }
+        .table td:nth-child(3), .table th:nth-child(3) {
+            width: 20%;
+        }
+        .table td:nth-child(4), .table th:nth-child(4) {
+            width: 15%;
+        }
+        .table td:nth-child(5), .table th:nth-child(5) {
+            width: 10%;
+        }
+        .table td:nth-child(6), .table th:nth-child(6) {
+            width: 10%;
+        }
+        .table td:nth-child(7), .table th:nth-child(7) {
+            width: 8%;
+        }
+        .table td:nth-child(8), .table th:nth-child(8) {
+            width: 10%;
+        }
+
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            padding: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container-fluid">
+        <h2 class="text-center">Findings List</h2>
+
+        <!-- Filters (Fixed on Top) -->
+        <div class="filter-section">
+            <div>
+                <input type="checkbox" class="form-check-input" id="filterOpen" checked> 
+                <label for="filterOpen">Open</label>
+                <input type="checkbox" class="form-check-input ms-3" id="filterClosed"> 
+                <label for="filterClosed">Completed</label>
+            </div>
+            <div>
+                <label class="me-2">Filter by Assigned To:</label>
+                <select id="assignedToFilter" class="form-select d-inline w-auto">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div>
+                <label class="me-2">Filter by Version:</label>
+                <select id="versionFilter" class="form-select d-inline w-auto">
+                    <option value="">All Versions</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Counts for Open/Closed Findings by Version -->
+        <div id="versionCounts" class="my-3">
+            <p id="openCount">Open: 0</p>
+            <p id="closedCount">Closed: 0</p>
+        </div>
+
+        <!-- Loading Message -->
+        <div id="loadingMessage" class="loading">Loading...</div>
+
+        <!-- Scrollable Table -->
+        <div class="table-container">
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>Issue Key</th>
+                        <th>Date</th>
+                        <th>Comments</th>
+                        <th>Assigned To</th>
+                        <th>Status</th>
+                        <th>Assigned On</th>
+                        <th>Version</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="findingsBody">
+                    <!-- Data will be inserted here dynamically -->
+                </tbody>
+            </table>
+        </div>
+
+        <nav>
+            <ul class="pagination">
+                <li class="page-item"><a class="page-link" id="prevPage">Previous</a></li>
+                <li class="page-item disabled"><a class="page-link" id="pageInfo"></a></li>
+                <li class="page-item"><a class="page-link" id="nextPage">Next</a></li>
+            </ul>
+        </nav>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let findings = [];
+        let currentPage = 1;
+        const recordsPerPage = 6;
+        let totalFindings = 0;
+
+        async function fetchFindings() {
+            try {
+                // Show loading message
+                document.getElementById('loadingMessage').style.display = 'block';
+                
+                const response = await fetch('https://demo.defectdojo.org/api/v2/findings/?limit=100000000000&offset=0&reporter=4');
+                const data = await response.json();
+                findings = data.results;
+                totalFindings = data.count; // Total findings count
+                // Hide loading message
+                document.getElementById('loadingMessage').style.display = 'none';
+
+                // Sort findings by the latest date first
+                findings.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+                populateAssignedToDropdown();
+                populateVersionDropdown();
+                filterAndDisplayData();
+            } catch (error) {
+                console.error('Error fetching findings:', error);
+                document.getElementById('loadingMessage').innerHTML = 'Failed to load data.';
+            }
+        }
+
+        function filterAndDisplayData() {
+            const filterOpen = document.getElementById('filterOpen').checked;
+            const filterClosed = document.getElementById('filterClosed').checked;
+            const assignedToFilter = document.getElementById('assignedToFilter').value.toLowerCase();
+            const versionFilter = document.getElementById('versionFilter').value.toLowerCase();
+
+            let filteredFindings = findings.filter(finding => {
+                const isPending = !finding.is_mitigated; // Open (Pending) status
+                const isVerified = finding.verified;    // Closed (Completed) status
+                
+                let statusMatch = (filterOpen && isPending && !isVerified) || (filterClosed && isVerified);
+                let assignedMatch = assignedToFilter === "" || finding.mitigation.toLowerCase().includes(assignedToFilter);
+                let versionMatch = versionFilter === "" || finding.planned_remediation_version.toLowerCase().includes(versionFilter);
+                
+                return statusMatch && assignedMatch && versionMatch;
+            });
+
+            updateVersionCounts(filteredFindings);
+            paginateAndDisplay(filteredFindings);
+        }
+
+        function paginateAndDisplay(data) {
+            const startIndex = (currentPage - 1) * recordsPerPage;
+            const paginatedData = data.slice(startIndex, startIndex + recordsPerPage);
+
+            const tableBody = document.getElementById('findingsBody');
+            tableBody.innerHTML = "";
+
+            paginatedData.forEach(finding => {
+                const row = document.createElement('tr');
+                row.innerHTML = ` 
+                    <td>${finding.title || 'N/A'}</td>
+                    <td>${formatDate(finding.created) || 'N/A'}</td>
+                    <td>${finding.description || 'N/A'}</td>
+                    <td>${finding.mitigation || 'N/A'}</td>
+                    <td>${finding.verified ? 'Closed' : 'Open'}</td>
+                    <td>${formatDate(finding.date) || 'N/A'}</td>
+                    <td>${finding.planned_remediation_version || 'N/A'}</td>
+                    <td>
+                    <button class="btn btn-edit" onclick="window.open('https://demo.defectdojo.org/finding/${finding.id}/edit?return_url=/finding', '_blank')">Edit</button>
+                    <button class="btn btn-close" onclick="window.open('https://demo.defectdojo.org/finding/${finding.id}/close', '_blank')">Close</button>
+                </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            const pageInfo = document.getElementById('pageInfo');
+            pageInfo.innerText = `Page ${currentPage} of ${Math.ceil(data.length / recordsPerPage)}`;
+
+            document.getElementById('prevPage').classList.toggle('disabled', currentPage === 1);
+            document.getElementById('nextPage').classList.toggle('disabled', currentPage * recordsPerPage >= data.length);
+        }
+
+        function formatDate(date) {
+            if (!date) return '';
+            const d = new Date(date);
+            return d.toLocaleDateString();
+        }
+
+        function updateVersionCounts(filteredFindings) {
+            const openCount = filteredFindings.filter(f => !f.is_mitigated && !f.verified).length;
+            const closedCount = filteredFindings.filter(f => f.verified).length;
+
+            document.getElementById('openCount').innerText = `Open: ${openCount}`;
+            document.getElementById('closedCount').innerText = `Closed: ${closedCount}`;
+        }
+
+        function populateAssignedToDropdown() {
+            const assignedToFilter = document.getElementById('assignedToFilter');
+            const uniqueAssignees = [...new Set(findings.map(f => f.mitigation))];
+            uniqueAssignees.forEach(assignee => {
+                const option = document.createElement('option');
+                option.value = assignee;
+                option.innerText = assignee || 'Unassigned';
+                assignedToFilter.appendChild(option);
+            });
+        }
+
+        function populateVersionDropdown() {
+            const versionFilter = document.getElementById('versionFilter');
+            const uniqueVersions = [...new Set(findings.map(f => f.planned_remediation_version))];
+            uniqueVersions.forEach(version => {
+                const option = document.createElement('option');
+                option.value = version;
+                option.innerText = version || 'No Version';
+                versionFilter.appendChild(option);
+            });
+        }
+
+        document.getElementById('prevPage').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                filterAndDisplayData();
+            }
+        });
+
+        document.getElementById('nextPage').addEventListener('click', () => {
+            if (currentPage * recordsPerPage < findings.length) {
+                currentPage++;
+                filterAndDisplayData();
+            }
+        });
+
+        document.getElementById('filterOpen').addEventListener('change', filterAndDisplayData);
+        document.getElementById('filterClosed').addEventListener('change', filterAndDisplayData);
+        document.getElementById('assignedToFilter').addEventListener('change', filterAndDisplayData);
+        document.getElementById('versionFilter').addEventListener('change', filterAndDisplayData);
+
+        fetchFindings();
+    </script>
+
+</body>
+</html>
