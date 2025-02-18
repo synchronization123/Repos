@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patch Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .toast-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .toast {
+            opacity: 1;
+            transition: opacity 1s ease-out;
+        }
+        .toast.toast-hide {
+            opacity: 0;
+        }
+		
+		.table.table-striped tr, 
+.table.table-striped td {
+    font-size: 12px;
+}
+
+#engagements-table-body tr, 
+#engagements-table-body td, 
+#engagements-table-body input, 
+#engagements-table-body select, 
+#engagements-table-body textarea, 
+#engagements-table-body button {
+    font-size: 12px;
+}
+
+#engagements-table-body td:nth-child(3) { /* Adjust the nth-child if "name" is in a different column */
+    width: 5cm; 
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+#engagements-table-body input[id^="name-"] {
+    width: 100%; /* Ensures input takes full column width */
+}
+
+#engagements-table-body td:nth-child(X) { /* Replace X with the correct column index */
+    width: 10cm;
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+#engagements-table-body textarea[id^="description-"] {
+    width: 100%; /* Ensures the textarea takes full column width */
+    max-width: 100%; /* Prevents textarea from exceeding the column width */
+}
+
+    </style>
+    <script>
+        async function fetchCSRFToken() {
+            try {
+                const fetchUrl = "https://demo.defectdojo.org/api/key-v2";
+                const response = await fetch(fetchUrl, { credentials: "include" });
+                const text = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, "text/html");
+                const csrfToken = doc.querySelector("input[name='csrfmiddlewaretoken']")?.value || "Not found";
+                document.getElementById("csrf_token").value = csrfToken;
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set("csrf", csrfToken);
+                window.history.replaceState({}, "", currentUrl);
+                return csrfToken;
+            } catch (error) {
+                console.error("Error fetching CSRF token:", error);
+                return null;
+            }
+        }
+
+async function updateEngagement(engagementId, engagementName, created) {
+    const csrfToken = document.getElementById("csrf_token").value;
+    if (!csrfToken || csrfToken === "Not found") {
+        showToast("Failed to retrieve CSRF token!", "danger", engagementId);
+        return;
+    }
+
+    const status = document.getElementById(`status-${engagementId}`).value;
+    const commit_hash = document.getElementById(`commit_hash-${engagementId}`).value;
+    const version = document.getElementById(`version-${engagementId}`).value;
+    const reason = document.getElementById(`reason-${engagementId}`).value;
+    const branch_tag = document.getElementById(`branch_tag-${engagementId}`).value;
+    const description = document.getElementById(`description-${engagementId}`).value;
+    const target_start = document.getElementById(`target_start-${engagementId}`).value;
+	const target_end = document.getElementById(`target_end-${engagementId}`).value;
+    const engagementData = await fetchEngagementData(engagementId);
+    if (!engagementData) {
+        showToast("Failed to fetch engagement data.", "danger", engagementId);
+        return;
+    }
+
+    const { tags, first_contacted, lead, product } = engagementData;
+
+    let active = false;
+    if (status === "Not Started" || status === "In Progress" || status === "On Hold") {
+        active = true;
+    }
+
+    const data = {
+        tags,
+        created,
+        name: engagementName,
+        version,
+        lead,
+        status,
+        commit_hash,
+        branch_tag,
+        reason,
+        target_start,
+        target_end,
+        description,
+        first_contacted, // ✅ Added missing parameter
+        active,          // ✅ Added missing parameter
+        product          // ✅ Added missing parameter
+    };
+
+    const apiUrl = `https://demo.defectdojo.org/api/v2/engagements/${engagementId}/`;
+    const apiToken = "548afd6fab3bea9794a41b31da0e9404f733e222";
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Token ${apiToken}`,
+                "X-CSRFToken": csrfToken
+            },
+            credentials: "include",
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            showModal(engagementId, engagementName);
+            fetchEngagements();
+        } else {
+            showToast(`Failed to update engagement: ${response.statusText}`, "danger", engagementId);
+        }
+    } catch (error) {
+        console.error("Error updating engagement:", error);
+        showToast("An error occurred while updating engagement.", "danger", engagementId);
+    }
+}
+
+
+        function showToast(message, type, engagementId) {
+            const toastContainer = document.querySelector(".toast-container");
+            const toast = document.createElement("div");
+            toast.classList.add("toast", `bg-${type}`, "text-white", "mb-2");
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add("toast-hide");
+                setTimeout(() => toast.remove(), 1000);
+            }, 3000);
+        }
+
+        function showModal(engagementId, engagementName) {
+            const modalTitle = document.getElementById("modalTitle");
+            const modalBody = document.getElementById("modalBody");
+            modalTitle.textContent = `Engagement Updated`;
+            modalBody.textContent = `ID: ${engagementId} Name: ${engagementName} has been updated.`;
+            const modal = new bootstrap.Modal(document.getElementById("updateModal"));
+            modal.show();
+        }
+
+async function fetchEngagementData(engagementId) {
+    try {
+        const apiUrl = `https://demo.defectdojo.org/api/v2/engagements/${engagementId}/`;
+        const response = await fetch(apiUrl, {
+            method: "GET",
+            headers: {
+                "Authorization": "Token 548afd6fab3bea9794a41b31da0e9404f733e222"
+            }
+        });
+
+        if (response.ok) {
+            return await response.json();
+        } else {
+            console.error("Failed to fetch engagement data:", response.statusText);
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching engagement data:", error);
+        return null;
+    }
+}
+
+async function fetchEngagements(page = 1) {
+    try {
+        // Step 1: Fetch Logged-in User ID
+        const userResponse = await fetch("https://demo.defectdojo.org/api/v2/user_profile/", {
+            method: "GET",
+            headers: {
+                "Authorization": "Token 548afd6fab3bea9794a41b31da0e9404f733e222"
+            }
+        });
+
+        if (!userResponse.ok) {
+            console.error("Failed to fetch user profile:", userResponse.statusText);
+            return;
+        }
+
+        const userData = await userResponse.json();
+        const userId = userData.user.id; // Extract logged-in user ID
+
+        // Step 2: Fetch Engagements
+        const apiUrl = `https://demo.defectdojo.org/api/v2/engagements/?page=${page}`;
+        const response = await fetch(apiUrl, {
+            method: "GET",
+            headers: {
+                "Authorization": "Token 548afd6fab3bea9794a41b31da0e9404f733e222"
+            }
+        });
+
+        if (!response.ok) {
+            console.error("Failed to fetch engagements:", response.statusText);
+            return;
+        }
+
+        const data = await response.json();
+
+        // Step 3: Filter Engagements with "patch" tag and specific statuses where lead = logged-in user ID
+        const filteredEngagements = data.results.filter(engagement =>
+            engagement.tags && engagement.tags.includes("patch") &&
+            ["Not Started", "In Progress", "On Hold"].includes(engagement.status) &&
+            engagement.lead === userId // Check if lead matches the logged-in user ID
+        );
+
+        // Step 4: Display and paginate results
+        displayEngagements(filteredEngagements);
+        setupPagination(filteredEngagements.length, page);
+
+    } catch (error) {
+        console.error("Error fetching engagements:", error);
+    }
+}
+
+
+
+        function displayEngagements(engagements) {
+            const tableBody = document.getElementById("engagements-table-body");
+            tableBody.innerHTML = "";
+
+            engagements.forEach(engagement => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${engagement.id}</td>
+                    <td><input type="text" class="form-control" id="created-${engagement.id}" value="${engagement.created}"></td> 				
+                    <td><input type="text" class="form-control" id="name-${engagement.id}" value="${engagement.name}"></td>
+
+                    <td id="lead-${engagement.id}">${engagement.lead}</td>
+
+                    <td>
+                        <select class="form-select" id="status-${engagement.id}">
+                            <option value="Not Started" ${engagement.status === "Not Started" ? "selected" : ""}>Not Started</option>
+                            <option value="In Progress" ${engagement.status === "In Progress" ? "selected" : ""}>In Progress</option>
+                            <option value="Completed" ${engagement.status === "Completed" ? "selected" : ""}>Completed and Terv Closed</option>
+                            <option value="On Hold" ${engagement.status === "On Hold" ? "selected" : ""}>On Hold</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select" id="commit_hash-${engagement.id}">
+                            <option value="Pending" ${engagement.commit_hash === "Pending" ? "selected" : ""}>Pending</option>
+                            <option value="Reviewed-Approved" ${engagement.commit_hash === "Reviewed-Approved" ? "selected" : ""}>Reviewed-Approved</option>
+                            <option value="Reviewed-Approved with Exception" ${engagement.commit_hash === "Reviewed-Approved with Exception" ? "selected" : ""}>Reviewed-Approved with Exception</option>
+                            <option value="Reviewed-Rejected" ${engagement.commit_hash === "Reviewed-Rejected" ? "selected" : ""}>Reviewed-Rejected</option>
+							<option value="Suggested Changes" ${engagement.commit_hash === "Suggested Changes" ? "selected" : ""}>Suggested Changes</option>
+                        </select>
+                    </td>
+					
+                    <td>
+                        <select class="form-select" id="branch_tag-${engagement.id}">
+                            <option value="Pending" ${engagement.branch_tag === "Pending" ? "selected" : ""}>Pending</option>
+                            <option value="Reviewed-Approved" ${engagement.branch_tag === "Reviewed-Approved" ? "selected" : ""}>Reviewed-Approved</option>
+                            <option value="Reviewed-Approved with Exception" ${engagement.branch_tag === "Reviewed-Approved with Exception" ? "selected" : ""}>Reviewed-Approved with Exception</option>
+                            <option value="Reviewed-Rejected" ${engagement.branch_tag === "Reviewed-Rejected" ? "selected" : ""}>Reviewed-Rejected</option>
+							<option value="Suggested Changes" ${engagement.branch_tag === "Suggested Changes" ? "selected" : ""}>Suggested Changes</option>
+                        </select>
+                    </td>				
+					<td><input type="text" class="form-control" id="reason-${engagement.id}" value="${engagement.reason}"></td>
+<td><input type="date" class="form-control" id="target_start-${engagement.id}" value="${engagement.target_start}"></td>
+<td><input type="date" class="form-control" id="target_end-${engagement.id}" value="${engagement.target_end}"></td>
+  <td><input type="text" class="form-control" id="version-${engagement.id}" value="${engagement.version}"></td> 
+<td>
+    <textarea class="form-control" id="description-${engagement.id}" maxlength="2000" style="white-space: pre-wrap; word-wrap: break-word; height: 100px;">${engagement.description}</textarea>
+</td>
+
+					
+					
+					
+                    <td>
+                        <button id="update-btn-${engagement.id}" class="btn btn-primary" onclick="updateEngagement(${engagement.id}, '${engagement.name}')">Save</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function setupPagination(totalCount, currentPage) {
+            const pagination = document.getElementById("pagination");
+            pagination.innerHTML = "";
+
+            const totalPages = Math.ceil(totalCount / 5); 
+
+            for (let i = 1; i <= totalPages; i++) {
+                const pageItem = document.createElement("li");
+                pageItem.classList.add("page-item");
+                const pageLink = document.createElement("a");
+                pageLink.classList.add("page-link");
+                pageLink.href = "#";
+                pageLink.textContent = i;
+                pageLink.onclick = () => fetchEngagements(i);
+
+                if (i === currentPage) {
+                    pageItem.classList.add("active");
+                }
+
+                pageItem.appendChild(pageLink);
+                pagination.appendChild(pageItem);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchCSRFToken();
+            fetchEngagements(); 
+        });
+    </script>
+</head>
+<body>
+    <h2>Patch</h2>
+
+    <!-- Hidden input field to store CSRF token -->
+    <input type="hidden" id="csrf_token" name="csrfmiddlewaretoken" value="">
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Created On</th>				
+                <th>Patch</th>
+                <th>Assigned To</th>
+                <th>Status</th>				
+                <th>Mentor Review</th>
+                <th>Lead Approval</th>
+                <th>Created By</th>				
+                <th>AppSec ETA</th>
+                <th>PM ETA</th>
+				<th>IR #</th>
+                <th>Comments</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="engagements-table-body">
+            <!-- Engagement rows will be inserted here dynamically -->
+        </tbody>
+    </table>
+
+    <nav aria-label="Page navigation">
+        <ul class="pagination" id="pagination">
+            <!-- Pagination items will be populated here -->
+        </ul>
+    </nav>
+
+    <!-- Modal -->
+    <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Updated</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- Modal message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification container -->
+    <div class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

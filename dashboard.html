@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status-wise Task Count</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fa;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .dashboard-container {
+            margin-top: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .dashboard-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+        }
+        .status-card {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            width: 150px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+        .status-card h2 {
+            margin: 0;
+            font-size: 1.5em;
+            color: #007BFF;
+        }
+        .status-card p {
+            font-size: 1.2em;
+            color: #333;
+            margin: 10px 0 0;
+        }
+        .status-card .count {
+            font-weight: bold;
+            font-size: 2em;
+        }
+        .high-count {
+            color: green;
+        }
+        .dashboard-title {
+            text-align: center;
+            font-size: 1.8em;
+            color: #444;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Status-wise Task Count Dashboard</h1>
+
+    <div class="dashboard-container">
+
+        <!-- Patch Tasks Row -->
+        <div class="dashboard-title">Patch Tasks</div>
+        <div id="patch-dashboard" class="dashboard-row">
+            <!-- Patch task cards will be populated here -->
+        </div>
+
+        <!-- VAPT Tasks Row -->
+        <div class="dashboard-title">VAPT Tasks</div>
+        <div id="vapt-dashboard" class="dashboard-row">
+            <!-- VAPT task cards will be populated here -->
+        </div>
+
+    </div>
+
+    <script>
+        async function fetchEngagements(page = 1) {
+            try {
+                const userResponse = await fetch("https://demo.defectdojo.org/api/v2/user_profile/", {
+                    method: "GET",
+                    headers: {
+                        "Authorization": "Token 548afd6fab3bea9794a41b31da0e9404f733e222"
+                    }
+                });
+
+                if (!userResponse.ok) {
+                    console.error("Failed to fetch user profile:", userResponse.statusText);
+                    return;
+                }
+
+                const userData = await userResponse.json();
+                const userId = userData.user.id;
+
+                const apiUrl = `https://demo.defectdojo.org/api/v2/engagements/?page=${page}`;
+                const response = await fetch(apiUrl, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": "Token 548afd6fab3bea9794a41b31da0e9404f733e222"
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error("Failed to fetch engagements:", response.statusText);
+                    return;
+                }
+
+                const data = await response.json();
+
+                const patchEngagements = data.results.filter(engagement =>
+                    engagement.tags && engagement.tags.includes("patch") &&
+                    ["Not Started", "In Progress", "On Hold"].includes(engagement.status) &&
+                    engagement.lead === userId
+                );
+
+                const vaptEngagements = data.results.filter(engagement =>
+                    engagement.tags && engagement.tags.includes("vapt") &&
+                    ["Not Started", "In Progress", "On Hold"].includes(engagement.status) &&
+                    engagement.lead === userId
+                );
+
+                // Count tasks by status for both Patch and VAPT
+                const patchStatusCounts = countTasksByStatus(patchEngagements);
+                const vaptStatusCounts = countTasksByStatus(vaptEngagements);
+
+                // Display tasks in respective dashboards
+                displayDashboard(patchStatusCounts, "patch-dashboard");
+                displayDashboard(vaptStatusCounts, "vapt-dashboard");
+
+            } catch (error) {
+                console.error("Error fetching engagements:", error);
+            }
+        }
+
+        function countTasksByStatus(engagements) {
+            const statusCounts = {
+                "Not Started": 0,
+                "In Progress": 0,
+                "On Hold": 0
+            };
+
+            engagements.forEach(engagement => {
+                if (statusCounts[engagement.status] !== undefined) {
+                    statusCounts[engagement.status]++;
+                }
+            });
+
+            return statusCounts;
+        }
+
+        function displayDashboard(statusCounts, elementId) {
+            const dashboard = document.getElementById(elementId);
+
+            for (const [status, count] of Object.entries(statusCounts)) {
+                const card = document.createElement("div");
+                card.classList.add("status-card");
+
+                let countClass = count > 0 ? "high-count" : ""; // Apply green color if count > 0
+
+                card.innerHTML = `
+                    <h2>${status}</h2>
+                    <p class="count ${countClass}">${count} Task${count !== 1 ? 's' : ''}</p>
+                `;
+                dashboard.appendChild(card);
+            }
+        }
+
+        // Fetch data on page load
+        window.onload = () => fetchEngagements();
+    </script>
+
+</body>
+</html>

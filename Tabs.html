@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DefectDojo Tabs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .tab-content {
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        .nav-tabs {
+            border-bottom: 2px solid #ddd;
+        }
+        .nav-tabs .nav-item .nav-link {
+            padding: 10px 20px;
+        }
+        /* Logo styling */
+        .logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 5.93cm;
+            height: 0.79cm;
+            z-index: 1000; /* Ensure logo stays on top of other content */
+        }
+    </style>
+</head>
+<body>
+
+<!-- Logo -->
+<img src="https://demo.defectdojo.org/static/dojo/img/logo.png" alt="DefectDojo Logo" class="logo">
+
+<div class="container mt-4">
+    <!-- Main Tabs -->
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+        <!-- Dashboard Tab -->
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab">Dashboard</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="task1-tab" data-bs-toggle="tab" data-bs-target="#task1" type="button" role="tab">Task 1</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="task2-tab" data-bs-toggle="tab" data-bs-target="#task2" type="button" role="tab">Task 2</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="task3-tab" data-bs-toggle="tab" data-bs-target="#task3" type="button" role="tab">Task 3</button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3" id="mainTabsContent">
+        <!-- Dashboard Tab Content -->
+        <div class="tab-pane fade show active" id="dashboard" role="tabpanel">
+            <iframe src="https://demo.defectdojo.org/media/uploaded_files/0a21974c-0e89-4cb3-a4a5-4b5b6824f511.html" width="100%" height="600px" style="border: none;"></iframe>
+        </div>
+
+        <!-- Task 1 Subtabs -->
+        <div class="tab-pane fade" id="task1" role="tabpanel">
+            <ul class="nav nav-tabs mt-3" id="task1-subtabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="engagements-tab" data-bs-toggle="tab" data-bs-target="#engagements" type="button" role="tab">Engagements</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tests-tab" data-bs-toggle="tab" data-bs-target="#tests" type="button" role="tab">Tests</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="jiraimporter-tab" data-bs-toggle="tab" data-bs-target="#jiraimporter" type="button" role="tab">Jira Importer</button>
+                </li>
+            </ul>
+
+            <div class="tab-content mt-3" id="task1-subtabsContent">
+                <div class="tab-pane fade show active" id="engagements" role="tabpanel">
+                    <iframe src="https://demo.defectdojo.org/media/uploaded_files/62f9cf55-997e-4283-9c69-b2f3c924a80b.html" width="100%" height="600px" style="border: none;"></iframe>
+                </div>
+                <div class="tab-pane fade" id="tests" role="tabpanel">
+                    <iframe src="https://demo.defectdojo.org/media/uploaded_files/da142ca5-932a-450e-a9c1-18b595a4876f.html" width="100%" height="600px" style="border: none;"></iframe>
+                </div>
+                <div class="tab-pane fade" id="jiraimporter" role="tabpanel">
+                    <iframe src="https://demo.defectdojo.org/media/uploaded_files/a23339cd-e942-41c6-9a5c-5f2fcdea83d4.html" width="100%" height="600px" style="border: none;"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task 2 Placeholder -->
+        <div class="tab-pane fade" id="task2" role="tabpanel">
+            <h3>Task 2 Content</h3>
+            <p>Placeholder for Task 2. Add content as needed.</p>
+        </div>
+
+        <!-- Task 3 Placeholder -->
+        <div class="tab-pane fade" id="task3" role="tabpanel">
+            <h3>Task 3 Content</h3>
+            <p>Placeholder for Task 3. Add content as needed.</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

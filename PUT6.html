@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test List</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Custom CSS */
+        .note-entry {
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            text-align: justify;
+        }
+        .note-entry hr {
+            border-top: 1px solid #ccc;
+        }
+        .edit-icon {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: #0d6efd;
+        }
+        .saved {
+            color: green;
+        }
+        .not-saved {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+
+<div>
+    <h2>Test List</h2>
+
+    <!-- Engagement Dropdown -->
+<!-- Engagement Dropdown -->
+<div class="mb-3">
+    <label for="engagementDropdown" class="form-label">Select Engagement</label>
+    <select id="engagementDropdown" class="form-select" onchange="fetchTestData()">
+        <option value="" disabled selected>Select</option>
+        <!-- Options will be populated dynamically -->
+    </select>
+</div>
+
+
+    <!-- Saved Status -->
+    <div id="savedStatus" class="mb-3">
+        <!-- Dynamic status will show here -->
+    </div>
+
+    <!-- Test Table -->
+    <table id="testTable" class="table table-striped">
+        <thead>
+            <tr>
+                <th>Test ID</th>
+                <th>Test Type</th>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Completion %</th>
+                <th>Version</th>
+                <th>Commit Hash</th>
+                <th>Branch Tag</th>
+                <th>Notes</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be populated dynamically -->
+        </tbody>
+    </table>
+
+    <!-- Modal for Editing Notes -->
+    <div class="modal fade" id="notesModal" tabindex="-1" aria-labelledby="notesModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notesModalLabel">Edit Note</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea id="noteEntry" class="form-control" rows="4"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="saveNote()">Save Note</button>
+                </div>
+            </div>
+        </div>
+    </div>
+	
+
+
+
+	
+	
+	
+</div>
+
+<!-- CSRF Token Hidden Field -->
+<input type="hidden" id="csrf_token">
+
+<!-- Bootstrap JS and dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+// Fetch CSRF Token
+async function fetchCSRFToken() {
+    try {
+        const response = await fetch("https://demo.defectdojo.org/api/key-v2", { credentials: "include" });
+        const text = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/html");
+        const csrfToken = doc.querySelector("input[name='csrfmiddlewaretoken']")?.value || "Not found";
+        document.getElementById("csrf_token").value = csrfToken;
+    } catch (error) {
+        console.error("Error fetching CSRF token:", error);
+    }
+}
+
+// Fetch Engagements with "patch" tag
+async function fetchEngagements() {
+    try {
+        const engagementDropdown = document.getElementById('engagementDropdown');
+        engagementDropdown.innerHTML = `<option value="">Loading...</option>`;
+
+        // Step 1: Fetch Logged-in User ID
+        const userResponse = await fetch("https://demo.defectdojo.org/api/v2/user_profile/", {
+            method: "GET",
+            headers: {
+                "Authorization": "Token "
+            }
+        });
+
+        if (!userResponse.ok) {
+            console.error("Failed to fetch user profile:", userResponse.statusText);
+            engagementDropdown.innerHTML = `<option value="">Error Loading Engagements</option>`;
+            return;
+        }
+
+        const userData = await userResponse.json();
+        const userId = userData.user.id; // Extract logged-in user ID
+
+        // Step 2: Fetch Engagements
+        const response = await fetch("https://demo.defectdojo.org/api/v2/engagements/", {
+            method: "GET",
+            headers: {
+                "Authorization": "Token "
+            }
+        });
+
+        if (!response.ok) {
+            console.error("Failed to fetch engagements:", response.statusText);
+            engagementDropdown.innerHTML = `<option value="">Error Loading Engagements</option>`;
+            return;
+        }
+
+        const engagements = await response.json();
+
+        // Step 3: Filter engagements with "patch" tag and where lead = logged-in user ID
+       const filteredEngagements = engagements.results.filter(engagement => 
+    engagement.tags?.includes("patch") &&  // Check if tags exist and includes "patch"
+    engagement.lead === userId &&           // Filter by lead ID
+    engagement.status !== "Completed"       // Exclude engagements with "Completed" status
+);
+
+
+// Step 4: Populate dropdown
+engagementDropdown.innerHTML = `<option value="" disabled selected>Select an Engagement</option>`;
+filteredEngagements.forEach(engagement => {
+    const option = document.createElement('option');
+    option.value = engagement.id;
+    option.textContent = engagement.name;
+    engagementDropdown.appendChild(option);
+});
+
+
+        // Handle case where no matching engagements are found
+        if (filteredEngagements.length === 0) {
+            engagementDropdown.innerHTML = `<option value="">No Patch Engagements Found</option>`;
+        }
+
+    } catch (error) {
+        console.error("Error fetching engagements:", error);
+        engagementDropdown.innerHTML = `<option value="">Error Loading Engagements</option>`;
+    }
+}
+
+
+
+// Fetch Test Data for Selected Engagement
+async function fetchTestData() {
+    const engagementId = document.getElementById("engagementDropdown").value;
+    const response = await fetch(`https://demo.defectdojo.org/api/v2/tests/?engagement=${engagementId}`);
+    const testData = await response.json();
+    populateTestTable(testData.results);
+}
+
+function calculateCompletion(commitHash, branchTag) {
+    if ((commitHash === "Not Applicable" && branchTag === "Not Applicable") || 
+        (commitHash === "Completed" && branchTag === "Completed") || 
+        (commitHash === "Completed" && branchTag === "Not Applicable") || 
+        (commitHash === "Not Applicable" && branchTag === "Completed")) {
+        return 100;
+    }
+    if (commitHash === "Completed" || branchTag === "Completed") {
+        return 50;
+    }
+    return 0;
+}
+
+
+// Populate Test Data into Table
+function populateTestTable(tests) {
+    const tableBody = document.querySelector("#testTable tbody");
+    tableBody.innerHTML = "";
+
+    tests.forEach(test => {
+        const row = tableBody.insertRow();
+        const completionPercent = calculateCompletion(test.commit_hash, test.branch_tag);
+
+        row.innerHTML = `
+            <td>${test.id}</td>
+            <td>${test.test_type_name}</td>
+            <td>${test.title}</td>
+            <td>${test.description}</td>
+            <td>${new Date(test.target_start).toISOString().split('T')[0]}</td>
+            <td>${new Date(test.target_end).toISOString().split('T')[0]}</td>
+            <td>${test.percent_complete}%</td>
+            <td>${test.version}</td>
+            <td>
+                <select class="form-select" id="commitHash_${test.id}" onchange="markAsSaved(${test.id})">
+                    <option value="Not Started" ${test.commit_hash === "Not Started" ? "selected" : ""}>Not Started</option>
+                    <option value="In Progress" ${test.commit_hash === "In Progress" ? "selected" : ""}>In Progress</option>
+                    <option value="On Hold" ${test.commit_hash === "On Hold" ? "selected" : ""}>On Hold</option>
+                    <option value="Not Applicable" ${test.commit_hash === "Not Applicable" ? "selected" : ""}>Not Applicable</option>
+                    <option value="Completed" ${test.commit_hash === "Completed" ? "selected" : ""}>Completed</option>
+                </select>
+            </td>
+            <td>
+                <select class="form-select" id="branchTag_${test.id}" onchange="markAsSaved(${test.id})">
+                    <option value="Not Started" ${test.branch_tag === "Not Started" ? "selected" : ""}>Not Started</option>
+                    <option value="In Progress" ${test.branch_tag === "In Progress" ? "selected" : ""}>In Progress</option>
+                    <option value="On Hold" ${test.branch_tag === "On Hold" ? "selected" : ""}>On Hold</option>
+                    <option value="Not Applicable" ${test.branch_tag === "Not Applicable" ? "selected" : ""}>Not Applicable</option>
+                    <option value="Completed" ${test.branch_tag === "Completed" ? "selected" : ""}>Completed</option>
+                </select>
+            </td>
+
+                <td>
+                    <textarea id="buildId_${test.id}" class="form-control" maxlength="150" placeholder="Enter build ID (max 150 characters)">${test.build_id || ""}</textarea>
+                </td>
+
+
+
+            <td>
+                <button class="btn btn-primary" onclick="saveTestData(${test.id})">Save</button>
+				
+
+            </td>
+        `;
+    });
+}
+
+
+
+
+function updateCompletion(testId) {
+    const commitHash = document.getElementById(`commitHash_${testId}`).value;
+    const branchTag = document.getElementById(`branchTag_${testId}`).value;
+    const percentComplete = calculateCompletion(commitHash, branchTag);
+    document.getElementById(`completion_${testId}`).innerText = `${percentComplete}%`;
+}
+
+
+
+
+
+
+
+
+
+
+// Save Test Data
+async function saveTestData(testId) {
+    const commitHash = document.getElementById(`commitHash_${testId}`).value;
+	const buildId = document.getElementById(`buildId_${testId}`).value.substring(0, 150); // Limit to 150 characters
+
+    const branchTag = document.getElementById(`branchTag_${testId}`).value;
+    const percentComplete = calculateCompletion(commitHash, branchTag);
+
+
+
+
+
+    // Fetch the current test details
+    const response = await fetch(`https://demo.defectdojo.org/api/v2/tests/${testId}/`);
+    const testData = await response.json();
+
+    const updatedTestData = {
+        target_start: testData.target_start, // Keep the original start date
+        target_end: testData.target_end,     // Keep the original end date
+        test_type: testData.test_type,       // Keep the original test type
+        commit_hash: commitHash,             // Updated commit_hash
+        branch_tag: branchTag,             // Updated branch_tag
+		percent_complete: percentComplete,
+		build_id: buildId                    // Updated build_id
+
+
+    };
+
+    const csrfToken = document.getElementById("csrf_token").value;
+
+    const saveResponse = await fetch(`https://demo.defectdojo.org/api/v2/tests/${testId}/`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify(updatedTestData),
+        credentials: "include",
+    });
+
+    if (saveResponse.ok) {
+        const savedStatusDiv = document.getElementById("savedStatus");
+        savedStatusDiv.innerHTML = "<span class='saved'>Saved successfully!</span>";
+        setTimeout(() => {
+            savedStatusDiv.innerHTML = "";
+        }, 3000);
+    } else {
+        alert("Failed to save test data.");
+    }
+}
+
+// Edit Notes
+function editNotes(testId, noteId, noteContent) {
+    document.getElementById("noteEntry").value = noteContent;
+    document.getElementById("noteEntry").dataset.testId = testId;
+    document.getElementById("noteEntry").dataset.noteId = noteId;
+    $('#notesModal').modal('show');
+}
+
+// Save Note
+async function saveNote() {
+    const noteEntry = document.getElementById("noteEntry").value;
+    const testId = document.querySelector("#noteEntry").dataset.testId;
+    const noteId = document.querySelector("#noteEntry").dataset.noteId;
+
+    const updatedNote = {
+        entry: noteEntry,
+        test: testId, // Ensure the test ID is passed
+    };
+
+    const csrfToken = document.getElementById("csrf_token").value;
+
+    const method = noteId ? 'PUT' : 'POST';
+    const endpoint = noteId ? `https://demo.defectdojo.org/api/v2/notes/${noteId}/` : `https://demo.defectdojo.org/api/v2/notes/`;
+
+    const response = await fetch(endpoint, {
+        method: method,
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify(updatedNote),
+        credentials: "include",
+    });
+
+    if (response.ok) {
+        $('#notesModal').modal('hide');
+        fetchTestData(); // Refresh table data after note update
+    } else {
+        alert("Failed to save the note.");
+    }
+}
+
+
+    
+	
+	
+	
+
+
+
+
+
+
+
+
+
+// Escape HTML for safe rendering
+function escapeHTML(str) {
+    return str.replace(/[&<>"'`=\/]/g, (match) => {
+        const escapeMap = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+            '`': '&#96;',
+            '=': '&#61;',
+            '/': '&#47;',
+        };
+        return escapeMap[match];
+    });
+}
+
+// Initialize the page
+fetchCSRFToken();
+fetchEngagements();
+</script>
+
+</body>
+</html>
