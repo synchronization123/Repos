@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabbed Navigation</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .tabs { display: flex; gap: 15px; cursor: pointer; padding: 10px; background: #f4f4f4; }
+        .tabs div { padding: 10px; border-radius: 5px; }
+        .tabs div:hover, .active { background: #007bff; color: white; }
+        .subtabs { display: none; padding: 10px; margin-top: 5px; background: #e9ecef; }
+        .subtabs div { padding: 8px; cursor: pointer; }
+        .subtabs div:hover { background: #d0d7de; }
+        #content { padding: 20px; border: 1px solid #ddd; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="tabs">
+        <div onclick="showTab('dashboard')">Dashboard</div>
+        <div onclick="showTab('patches')">Patches</div>
+        <div onclick="showTab('vapt')">VAPT</div>
+        <div onclick="showTab('mcr')">MCR</div>
+    </div>
+
+    <div id="sub-tabs">
+        <div id="patches-sub" class="subtabs">
+            <div onclick="loadContent('https://demo.defectdojo.org/engagements/engagements.html')">Engagement</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/tests/tests.html')">Tests</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/findings/findings.html')">Findings</div>
+        </div>
+        <div id="vapt-sub" class="subtabs">
+            <div onclick="loadContent('https://demo.defectdojo.org/engagements/engagements.html')">Engagement</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/tests/tests.html')">Tests</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/findings/findings.html')">Findings</div>
+        </div>
+        <div id="mcr-sub" class="subtabs">
+            <div onclick="loadContent('https://demo.defectdojo.org/engagements/engagements.html')">Engagement</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/tests/tests.html')">Tests</div>
+            <div onclick="loadContent('https://demo.defectdojo.org/findings/findings.html')">Findings</div>
+        </div>
+    </div>
+
+    <div id="content">Select a tab to view content.</div>
+
+    <script>
+        function showTab(tab) {
+            document.querySelectorAll('.subtabs').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.tabs div').forEach(el => el.classList.remove('active'));
+
+            if (tab !== 'dashboard') {
+                document.getElementById(tab + '-sub').style.display = 'block';
+            } else {
+                document.getElementById('content').innerHTML = 'Welcome to the Dashboard!';
+            }
+
+            event.target.classList.add('active');
+        }
+
+        function loadContent(url) {
+            fetch(url)
+                .then(response => response.text())
+                .then(data => document.getElementById('content').innerHTML = data)
+                .catch(error => document.getElementById('content').innerHTML = 'Failed to load content.');
+        }
+    </script>
+
+</body>
+</html>
