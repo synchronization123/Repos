@@ -32,13 +32,15 @@
         $.get("https://dojo.com/api/key-v2", function(data) {
             csrfToken = data.token;
             $("#csrf_token").val(csrfToken);
+            loadContent("page1.html"); // Load first tab with CSRF token
         });
 
         function loadContent(page) {
+            var pageUrl = page + "?csrf=" + encodeURIComponent(csrfToken);
+            
             $.ajax({
-                url: page,
+                url: pageUrl,
                 type: "GET",
-                headers: { "X-CSRFToken": csrfToken },
                 success: function(response) {
                     $("#contentDiv").html(response);
                 },
@@ -47,9 +49,6 @@
                 }
             });
         }
-
-        // Load first tab content by default
-        loadContent("page1.html");
 
         // Tab click event
         $(".tab").click(function() {
