@@ -3,67 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DefectDojo Dashboard</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <title>Web Component Tabs</title>
     <style>
-        body { font-family: Arial, sans-serif; }
-        .tab-container { display: flex; gap: 10px; margin-bottom: 10px; }
-        .tab { padding: 10px 15px; cursor: pointer; background: #ddd; border-radius: 5px; }
-        .tab.active { background: #007bff; color: white; }
-        #content { padding: 15px; border: 1px solid #ddd; min-height: 300px; }
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .tabs {
+            display: flex;
+            cursor: pointer;
+            background: #ddd;
+            padding: 10px;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            background: #bbb;
+            margin: 5px;
+            border-radius: 5px;
+        }
+        .tab.active {
+            background: #888;
+            color: white;
+        }
+        .content {
+            border: 1px solid #ccc;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
 
-<div class="tab-container">
-    <div class="tab active" data-url="https://demo.defectdojo.org/engagement/112/dashboard.html">Dashboard</div>
-    <div class="tab" data-url="https://demo.defectdojo.org/engagement/112/engagement.html">Patches - Engagement</div>
-    <div class="tab" data-url="https://demo.defectdojo.org/engagement/112/tests.html">Patches - Tests</div>
-    <div class="tab" data-url="https://demo.defectdojo.org/engagement/112/jiraimporter.html">Patches - Import Jira</div>
-    <div class="tab" data-url="https://demo.defectdojo.org/engagement/112/vapt.html">VAPT</div>
-    <div class="tab" data-url="https://demo.defectdojo.org/engagement/112/mcr.html">MCR</div>
-</div>
+    <div class="tabs">
+        <div class="tab active" onclick="showTab(0)">Tab 1</div>
+        <div class="tab" onclick="showTab(1)">Tab 2</div>
+    </div>
 
-<div id="content">Loading...</div>
+    <div id="content-container">
+        <external-content url="https://example.com/page1.html"></external-content>
+        <external-content url="https://example.com/page2.html" style="display: none;"></external-content>
+    </div>
 
-<script>
-    $(document).ready(function(){
-        function getCSRFToken() {
-            return new URLSearchParams(window.location.search).get("csrf_token") || "";
-        }
-
-        function loadContent(url) {
-            $("#content").html("Loading...");
-            
-            let csrfToken = getCSRFToken();
-            if (csrfToken) {
-                url += (url.includes("?") ? "&" : "?") + "csrf_token=" + csrfToken;
+    <script>
+        class ExternalContent extends HTMLElement {
+            connectedCallback() {
+                const url = this.getAttribute("url");
+                fetch(url)
+                    .then(response => response.text())
+                    .then(html => {
+                        this.attachShadow({ mode: "open" }).innerHTML = `<div class="content">${html}</div>`;
+                    })
+                    .catch(() => {
+                        this.attachShadow({ mode: "open" }).innerHTML = `<div class="content">Failed to load content.</div>`;
+                    });
             }
+        }
+        customElements.define("external-content", ExternalContent);
 
-            $.ajax({
-                url: url,
-                success: function(data) {
-                    $("#content").html(data);
-                },
-                error: function() {
-                    $("#content").html("<p style='color: red;'>Failed to load content.</p>");
-                }
+        function showTab(index) {
+            const tabs = document.querySelectorAll(".tab");
+            const contents = document.querySelectorAll("external-content");
+
+            tabs.forEach((tab, i) => {
+                tab.classList.toggle("active", i === index);
+                contents[i].style.display = i === index ? "block" : "none";
             });
         }
-
-        $(".tab").click(function() {
-            $(".tab").removeClass("active");
-            $(this).addClass("active");
-
-            let url = $(this).data("url");
-            loadContent(url);
-        });
-
-        // Load the first tab by default with CSRF token
-        let defaultUrl = $(".tab.active").data("url");
-        loadContent(defaultUrl);
-    });
-</script>
+    </script>
 
 </body>
 </html>
