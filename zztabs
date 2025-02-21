@@ -14,29 +14,35 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-        /* Ensure body takes full height */
-        body {
+        /* Ensure body takes full height and prevents scrolling issues */
+        body, html {
             margin: 0;
             padding: 0;
+            height: 100%;
             display: flex;
         }
 
-        /* Sidebar Container */
+        /* Sidebar Styling */
         #sidebar-container {
             width: 250px;
-            position: fixed;
             height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
             background: #343a40;
             color: white;
+            padding-top: 10px;
+            overflow-y: auto;
         }
 
-        /* Content area with proper margin */
+        /* Content Area */
         .content {
-            flex-grow: 1;
-            margin-left: 250px; /* Adjust based on sidebar width */
+            margin-left: 250px; /* Match sidebar width */
+            width: calc(100% - 250px); /* Prevent content from going behind sidebar */
             padding: 20px;
             background: #f8f9fa;
             min-height: 100vh;
+            overflow-x: hidden;
         }
     </style>
 </head>
