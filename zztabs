@@ -1,8 +1,49 @@
 <div id="sidebar">
-    <ul>
-        <li><a href="home.html">Home</a></li>
-        <li><a href="about.html">About</a></li>
-        <li><a href="services.html">Services</a></li>
-        <li><a href="contact.html">Contact</a></li>
+    <button id="toggle-btn">☰</button>
+    <ul class="menu">
+        <li><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> <span>Dashboard</span></a></li>
+
+        <li class="submenu">
+            <a href="#"><i class="fas fa-tools"></i> <span>Patches</span> <span class="toggle">+</span></a>
+            <ul class="sub-menu">
+                <li><a href="patches-list.html"><i class="fas fa-list"></i> List</a></li>
+                <li><a href="patches-jira.html"><i class="fab fa-jira"></i> Jira</a></li>
+                <li><a href="patches-import.html"><i class="fas fa-file-import"></i> Import</a></li>
+            </ul>
+        </li>
+
+        <li class="submenu">
+            <a href="#"><i class="fas fa-shield-alt"></i> <span>VAPT</span> <span class="toggle">+</span></a>
+            <ul class="sub-menu">
+                <li><a href="vapt-assigned.html"><i class="fas fa-user-check"></i> Assigned</a></li>
+                <li><a href="vapt-testcases.html"><i class="fas fa-vial"></i> Testcases</a></li>
+                <li><a href="vapt-findings.html"><i class="fas fa-bug"></i> Findings</a></li>
+            </ul>
+        </li>
     </ul>
 </div>
+
+<script>
+    $(document).ready(function(){
+        // Toggle Sidebar Collapse
+        $("#toggle-btn").click(function(){
+            $("#sidebar").toggleClass("collapsed");
+        });
+
+        // Toggle Submenus
+        $(".submenu > a").click(function(){
+            $(this).next(".sub-menu").slideToggle();
+            $(this).find(".toggle").text($(this).find(".toggle").text() == "+" ? "-" : "+");
+        });
+
+        // Active Menu Highlight
+        var currentPage = window.location.pathname.split("/").pop();
+        $(".menu a").each(function(){
+            if($(this).attr("href") === currentPage){
+                $(this).addClass("active");
+                $(this).closest(".sub-menu").slideDown();
+                $(this).closest(".submenu").find(".toggle").text("-");
+            }
+        });
+    });
+</script>
