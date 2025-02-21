@@ -19,33 +19,40 @@
             </li>
         </ul><div class="tab-content mt-2">
         <div class="tab-pane fade show active" id="dashboard">
-            <a href="https://dashboard.com" target="_blank" class="btn btn-primary">Go to Dashboard</a>
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" href="https://dashboard.com" target="_blank">Dashboard</a>
+                </li>
+            </ul>
+            <iframe src="https://dashboard.com" class="w-100" style="height:500px; border:none;"></iframe>
         </div>
         <div class="tab-pane fade" id="patches">
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo1.com" target="_blank">Tab 1</a>
+                    <a class="nav-link active" href="https://dojo1.com" target="content-frame">Tab 1</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo2.com" target="_blank">Tab 2</a>
+                    <a class="nav-link" href="https://dojo2.com" target="content-frame">Tab 2</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo3.html" target="_blank">Tab 3</a>
+                    <a class="nav-link" href="https://dojo3.html" target="content-frame">Tab 3</a>
                 </li>
             </ul>
+            <iframe name="content-frame" src="https://dojo1.com" class="w-100" style="height:500px; border:none;"></iframe>
         </div>
         <div class="tab-pane fade" id="vapt">
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo5.com" target="_blank">Tab 1</a>
+                    <a class="nav-link active" href="https://dojo5.com" target="vapt-frame">Tab 1</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo6.com" target="_blank">Tab 2</a>
+                    <a class="nav-link" href="https://dojo6.com" target="vapt-frame">Tab 2</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo7.html" target="_blank">Tab 3</a>
+                    <a class="nav-link" href="https://dojo7.html" target="vapt-frame">Tab 3</a>
                 </li>
             </ul>
+            <iframe name="vapt-frame" src="https://dojo5.com" class="w-100" style="height:500px; border:none;"></iframe>
         </div>
     </div>
 </div>
