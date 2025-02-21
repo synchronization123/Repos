@@ -3,60 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AJAX Tabs with CSRF</title>
+    <title>Bootstrap Tabs with CSRF</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <style>
-        .tab { cursor: pointer; padding: 10px; display: inline-block; background: #ddd; margin: 5px; }
-        .active { background: #bbb; }
-        #contentDiv { border: 1px solid #ccc; padding: 20px; margin-top: 10px; }
+        .nav-tabs .nav-link.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .tab-content {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <!-- CSRF Token Hidden Input -->
+<div class="container mt-4">
+    <h2>Bootstrap Tabs with AJAX & CSRF</h2>
+
+    <!-- Hidden CSRF Token -->
     <input type="hidden" id="csrf_token" name="csrfmiddlewaretoken" value="">
 
     <!-- Tabs -->
-    <div>
-        <span class="tab active" data-page="page1.html">Tab 1</span>
-        <span class="tab" data-page="page2.html">Tab 2</span>
+    <ul class="nav nav-tabs" id="mainTabs">
+        <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="tab" href="#mainpage1" data-page="MainPage1.html">Main Page 1</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#mainpage2" data-page="MainPage2.html">Main Page 2</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#mainpage3" data-page="MainPage3.html">Main Page 3</a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- Main Page 1 -->
+        <div class="tab-pane fade show active" id="mainpage1">
+            <h4>Main Page 1</h4>
+            <ul class="nav nav-pills mt-2">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#subpage1" data-page="SubPage1.html">Sub Page 1</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#subpage2" data-page="SubPage2.html">Sub Page 2</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#subpage3" data-page="SubPage3.html">Sub Page 3</a>
+                </li>
+            </ul>
+            <div class="tab-content mt-3">
+                <div class="tab-pane fade show active" id="subpage1">Loading...</div>
+                <div class="tab-pane fade" id="subpage2">Loading...</div>
+                <div class="tab-pane fade" id="subpage3">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Main Page 2 -->
+        <div class="tab-pane fade" id="mainpage2">Loading...</div>
+
+        <!-- Main Page 3 -->
+        <div class="tab-pane fade" id="mainpage3">
+            <h4>Main Page 3</h4>
+            <ul class="nav nav-pills mt-2">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#subpage1_m3" data-page="SubPage1.html">Sub Page 1</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#subpage2_m3" data-page="SubPage2.html">Sub Page 2</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#subpage3_m3" data-page="SubPage3.html">Sub Page 3</a>
+                </li>
+            </ul>
+            <div class="tab-content mt-3">
+                <div class="tab-pane fade show active" id="subpage1_m3">Loading...</div>
+                <div class="tab-pane fade" id="subpage2_m3">Loading...</div>
+                <div class="tab-pane fade" id="subpage3_m3">Loading...</div>
+            </div>
+        </div>
     </div>
+</div>
 
-    <!-- Content Div -->
-    <div id="contentDiv">Loading...</div>
+<script>
+    var csrfToken = '';
 
-    <script>
-        var csrfToken = '';
+    // Fetch CSRF token from API
+    $.get("https://dojo.com/api/key-v2", function(data) {
+        csrfToken = data.token;
+        $("#csrf_token").val(csrfToken);
+        
+        // Load default pages
+        loadContent("MainPage1.html", "#mainpage1", true);
+        loadContent("SubPage1.html?csrf=" + encodeURIComponent(csrfToken), "#subpage1", true);
+    });
 
-        // Fetch CSRF token
-        $.get("https://dojo.com/api/key-v2", function(data) {
-            csrfToken = data.token;
-            $("#csrf_token").val(csrfToken);
-            loadContent("page1.html"); // Load first tab with CSRF token
+    function loadContent(page, target, isMainPage = false) {
+        $.ajax({
+            url: page,
+            type: "GET",
+            success: function(response) {
+                $(target).html(response);
+            },
+            error: function() {
+                $(target).html("<p>Error loading content.</p>");
+            }
         });
+    }
 
-        function loadContent(page) {
-            var pageUrl = page + "?csrf=" + encodeURIComponent(csrfToken);
-            
-            $.ajax({
-                url: pageUrl,
-                type: "GET",
-                success: function(response) {
-                    $("#contentDiv").html(response);
-                },
-                error: function() {
-                    $("#contentDiv").html("<p>Error loading content.</p>");
-                }
-            });
+    // Load Main Pages
+    $('#mainTabs a').on('click', function() {
+        var page = $(this).data("page");
+        var target = $(this).attr("href");
+        loadContent(page, target, true);
+    });
+
+    // Load Sub Pages for Main Page 1
+    $('#mainpage1 .nav-pills a').on('click', function() {
+        var page = $(this).data("page");
+        var target = $(this).attr("href");
+
+        if (page === "SubPage1.html") {
+            loadContent(page + "?csrf=" + encodeURIComponent(csrfToken), target);
+        } else {
+            loadContent(page, target);
         }
+    });
 
-        // Tab click event
-        $(".tab").click(function() {
-            $(".tab").removeClass("active");
-            $(this).addClass("active");
-            loadContent($(this).data("page"));
-        });
-    </script>
+    // Load Sub Pages for Main Page 3
+    $('#mainpage3 .nav-pills a').on('click', function() {
+        var page = $(this).data("page");
+        var target = $(this).attr("href");
+
+        if (page === "SubPage1.html") {
+            loadContent(page + "?csrf=" + encodeURIComponent(csrfToken), target);
+        } else {
+            loadContent(page, target);
+        }
+    });
+</script>
 
 </body>
 </html>
