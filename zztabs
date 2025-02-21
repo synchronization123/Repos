@@ -21,7 +21,7 @@
             <li class="nav-item">
                 <a class="nav-link" href="#" onclick="showSubtabs(event, 'vapt', 'https://dojo5.com')">VAPT</a>
             </li>
-        </ul><div id="patches" class="subtabs">
+        </ul><div id="patches" class="subtabs active-main-tab">
         <ul class="nav nav-tabs">
             <li class="nav-item">
                 <a class="nav-link active" href="https://dojo1.com">Tab 1</a>
@@ -34,7 +34,7 @@
             </li>
         </ul>
     </div>
-    <div id="vapt" class="subtabs">
+    <div id="vapt" class="subtabs active-main-tab">
         <ul class="nav nav-tabs">
             <li class="nav-item">
                 <a class="nav-link active" href="https://dojo5.com">Tab 1</a>
@@ -53,7 +53,6 @@
 <script>
     function showSubtabs(event, tabId, defaultUrl) {
         event.preventDefault();
-        document.querySelectorAll('.subtabs').forEach(tab => tab.style.display = 'none');
         document.getElementById(tabId).style.display = 'block';
         window.location.href = defaultUrl;
     }
