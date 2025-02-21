@@ -7,10 +7,10 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; }
-        .tab-container { display: flex; gap: 10px; }
+        .tab-container { display: flex; gap: 10px; margin-bottom: 10px; }
         .tab { padding: 10px 15px; cursor: pointer; background: #ddd; border-radius: 5px; }
         .tab.active { background: #007bff; color: white; }
-        #content { margin-top: 20px; padding: 15px; border: 1px solid #ddd; min-height: 300px; }
+        #content { padding: 15px; border: 1px solid #ddd; min-height: 300px; }
     </style>
 </head>
 <body>
@@ -28,8 +28,18 @@
 
 <script>
     $(document).ready(function(){
+        function getCSRFToken() {
+            return new URLSearchParams(window.location.search).get("csrf_token") || "";
+        }
+
         function loadContent(url) {
             $("#content").html("Loading...");
+            
+            let csrfToken = getCSRFToken();
+            if (csrfToken) {
+                url += (url.includes("?") ? "&" : "?") + "csrf_token=" + csrfToken;
+            }
+
             $.ajax({
                 url: url,
                 success: function(data) {
@@ -49,8 +59,9 @@
             loadContent(url);
         });
 
-        // Load the first tab by default
-        loadContent($(".tab.active").data("url"));
+        // Load the first tab by default with CSRF token
+        let defaultUrl = $(".tab.active").data("url");
+        loadContent(defaultUrl);
     });
 </script>
 
