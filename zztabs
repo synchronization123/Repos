@@ -9,67 +9,45 @@
     <div class="container mt-3">
         <ul class="nav nav-tabs" id="mainTabs">
             <li class="nav-item">
-                <a class="nav-link active" data-bs-toggle="tab" href="#dashboard">Dashboard</a>
+                <a class="nav-link active" href="https://dashboard.com" target="_blank">Dashboard</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-bs-toggle="tab" href="#patches">Patches</a>
+                <a class="nav-link" href="#patches" data-bs-toggle="tab">Patches</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" data-bs-toggle="tab" href="#vapt">VAPT</a>
+                <a class="nav-link" href="#vapt" data-bs-toggle="tab">VAPT</a>
             </li>
         </ul><div class="tab-content mt-2">
-        <div class="tab-pane fade show active" id="dashboard">
-            <ul class="nav nav-tabs">
-                <li class="nav-item">
-                    <a class="nav-link active" href="https://dashboard.com" target="_blank">Dashboard</a>
-                </li>
-            </ul>
-            <iframe src="https://dashboard.com" class="w-100" style="height:500px; border:none;"></iframe>
-        </div>
         <div class="tab-pane fade" id="patches">
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link active" href="https://dojo1.com" target="content-frame">Tab 1</a>
+                    <a class="nav-link active" href="https://dojo1.com" target="_blank">Tab 1</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo2.com" target="content-frame">Tab 2</a>
+                    <a class="nav-link" href="https://dojo2.com" target="_blank">Tab 2</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo3.html" target="content-frame">Tab 3</a>
+                    <a class="nav-link" href="https://dojo3.html" target="_blank">Tab 3</a>
                 </li>
             </ul>
-            <iframe name="content-frame" src="https://dojo1.com" class="w-100" style="height:500px; border:none;"></iframe>
         </div>
         <div class="tab-pane fade" id="vapt">
             <ul class="nav nav-tabs">
                 <li class="nav-item">
-                    <a class="nav-link active" href="https://dojo5.com" target="vapt-frame">Tab 1</a>
+                    <a class="nav-link active" href="https://dojo5.com" target="_blank">Tab 1</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo6.com" target="vapt-frame">Tab 2</a>
+                    <a class="nav-link" href="https://dojo6.com" target="_blank">Tab 2</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://dojo7.html" target="vapt-frame">Tab 3</a>
+                    <a class="nav-link" href="https://dojo7.html" target="_blank">Tab 3</a>
                 </li>
             </ul>
-            <iframe name="vapt-frame" src="https://dojo5.com" class="w-100" style="height:500px; border:none;"></iframe>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        let mainTabs = document.querySelectorAll("#mainTabs .nav-link");
-        mainTabs.forEach(tab => {
-            tab.addEventListener("click", function() {
-                document.querySelector(".tab-pane.show.active").classList.remove("show", "active");
-                let targetPane = document.querySelector(this.getAttribute("href"));
-                targetPane.classList.add("show", "active");
-            });
-        });
-    });
-</script>
 
 </body>
 </html>
