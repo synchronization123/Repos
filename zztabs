@@ -3,74 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Component Tabs</title>
+    <title>Fetch API Tabs</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        .tabs {
-            display: flex;
-            cursor: pointer;
-            background: #ddd;
-            padding: 10px;
-        }
-        .tab {
-            flex: 1;
-            text-align: center;
-            padding: 10px;
-            background: #bbb;
-            margin: 5px;
-            border-radius: 5px;
-        }
-        .tab.active {
-            background: #888;
-            color: white;
-        }
-        .content {
-            border: 1px solid #ccc;
-            padding: 20px;
-            height: 300px;
-            overflow-y: auto;
-        }
+        body { font-family: Arial, sans-serif; }
+        .tabs { display: flex; cursor: pointer; background: #ddd; padding: 10px; }
+        .tab { flex: 1; text-align: center; padding: 10px; background: #bbb; margin: 5px; border-radius: 5px; }
+        .tab.active { background: #888; color: white; }
+        .content { border: 1px solid #ccc; padding: 20px; height: 300px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
     <div class="tabs">
-        <div class="tab active" onclick="showTab(0)">Tab 1</div>
-        <div class="tab" onclick="showTab(1)">Tab 2</div>
+        <div class="tab active" onclick="loadContent(0, 'https://example.com/page1.html')">Tab 1</div>
+        <div class="tab" onclick="loadContent(1, 'https://example.com/page2.html')">Tab 2</div>
     </div>
 
-    <div id="content-container">
-        <external-content url="https://example.com/page1.html"></external-content>
-        <external-content url="https://example.com/page2.html" style="display: none;"></external-content>
-    </div>
+    <div id="content" class="content">Loading...</div>
 
     <script>
-        class ExternalContent extends HTMLElement {
-            connectedCallback() {
-                const url = this.getAttribute("url");
-                fetch(url)
-                    .then(response => response.text())
-                    .then(html => {
-                        this.attachShadow({ mode: "open" }).innerHTML = `<div class="content">${html}</div>`;
-                    })
-                    .catch(() => {
-                        this.attachShadow({ mode: "open" }).innerHTML = `<div class="content">Failed to load content.</div>`;
-                    });
-            }
-        }
-        customElements.define("external-content", ExternalContent);
+        function loadContent(index, url) {
+            document.getElementById('content').innerHTML = "Loading...";
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('content').innerHTML = data;
+                })
+                .catch(() => {
+                    document.getElementById('content').innerHTML = "Failed to load content.";
+                });
 
-        function showTab(index) {
-            const tabs = document.querySelectorAll(".tab");
-            const contents = document.querySelectorAll("external-content");
-
-            tabs.forEach((tab, i) => {
-                tab.classList.toggle("active", i === index);
-                contents[i].style.display = i === index ? "block" : "none";
+            document.querySelectorAll('.tab').forEach((tab, i) => {
+                tab.classList.toggle('active', i === index);
             });
         }
+
+        // Load the first tab content initially
+        loadContent(0, 'https://example.com/page1.html');
     </script>
 
 </body>
