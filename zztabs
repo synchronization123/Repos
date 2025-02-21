@@ -4,56 +4,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Navigation Menu</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .subtabs { display: none; }
+        .active-tab .subtabs { display: block; }
+    </style>
 </head>
 <body>
     <div class="container mt-3">
         <ul class="nav nav-tabs" id="mainTabs">
             <li class="nav-item">
-                <a class="nav-link active" href="https://dashboard.com" target="_blank">Dashboard</a>
+                <a class="nav-link" href="https://dashboard.com" onclick="showSubtabs(event, 'dashboard')">Dashboard</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="#patches" data-bs-toggle="tab" onclick="openFirstSubtab('patches', 'https://dojo1.com');">Patches</a>
+                <a class="nav-link" href="https://dojo1.com" onclick="showSubtabs(event, 'patches', 'https://dojo1.com')">Patches</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="#vapt" data-bs-toggle="tab" onclick="openFirstSubtab('vapt', 'https://dojo5.com');">VAPT</a>
+                <a class="nav-link" href="https://dojo5.com" onclick="showSubtabs(event, 'vapt', 'https://dojo5.com')">VAPT</a>
             </li>
-        </ul><div class="tab-content mt-2">
-        <div class="tab-pane fade" id="patches">
-            <ul class="nav nav-tabs">
-                <li class="nav-item">
-                    <a class="nav-link active" href="https://dojo1.com" target="_blank">Tab 1</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="https://dojo2.com" target="_blank">Tab 2</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="https://dojo3.html" target="_blank">Tab 3</a>
-                </li>
-            </ul>
-        </div>
-        <div class="tab-pane fade" id="vapt">
-            <ul class="nav nav-tabs">
-                <li class="nav-item">
-                    <a class="nav-link active" href="https://dojo5.com" target="_blank">Tab 1</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="https://dojo6.com" target="_blank">Tab 2</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="https://dojo7.html" target="_blank">Tab 3</a>
-                </li>
-            </ul>
-        </div>
+        </ul><div id="dashboard" class="subtabs"></div>
+    <div id="patches" class="subtabs">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link active" href="https://dojo1.com">Tab 1</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://dojo2.com">Tab 2</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://dojo3.html">Tab 3</a>
+            </li>
+        </ul>
+    </div>
+    <div id="vapt" class="subtabs">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link active" href="https://dojo5.com">Tab 1</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://dojo6.com">Tab 2</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="https://dojo7.html">Tab 3</a>
+            </li>
+        </ul>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    function openFirstSubtab(tabId, url) {
-        setTimeout(() => {
-            document.getElementById(tabId).classList.add('show', 'active');
-            window.open(url, '_blank');
-        }, 100);
+    function showSubtabs(event, tabId, defaultUrl) {
+        event.preventDefault();
+        document.querySelectorAll('.subtabs').forEach(tab => tab.style.display = 'none');
+        document.getElementById(tabId).style.display = 'block';
+        if (defaultUrl) {
+            window.location.href = defaultUrl;
+        }
     }
 </script>
 
