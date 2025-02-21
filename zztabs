@@ -3,44 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fetch API Tabs</title>
+    <title>AJAX Tabs with CSRF</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; }
-        .tabs { display: flex; cursor: pointer; background: #ddd; padding: 10px; }
-        .tab { flex: 1; text-align: center; padding: 10px; background: #bbb; margin: 5px; border-radius: 5px; }
-        .tab.active { background: #888; color: white; }
-        .content { border: 1px solid #ccc; padding: 20px; height: 300px; overflow-y: auto; }
+        .tab { cursor: pointer; padding: 10px; display: inline-block; background: #ddd; margin: 5px; }
+        .active { background: #bbb; }
+        #contentDiv { border: 1px solid #ccc; padding: 20px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="tabs">
-        <div class="tab active" onclick="loadContent(0, 'https://example.com/page1.html')">Tab 1</div>
-        <div class="tab" onclick="loadContent(1, 'https://example.com/page2.html')">Tab 2</div>
+    <!-- CSRF Token Hidden Input -->
+    <input type="hidden" id="csrf_token" name="csrfmiddlewaretoken" value="">
+
+    <!-- Tabs -->
+    <div>
+        <span class="tab active" data-page="page1.html">Tab 1</span>
+        <span class="tab" data-page="page2.html">Tab 2</span>
     </div>
 
-    <div id="content" class="content">Loading...</div>
+    <!-- Content Div -->
+    <div id="contentDiv">Loading...</div>
 
     <script>
-        function loadContent(index, url) {
-            document.getElementById('content').innerHTML = "Loading...";
-            
-            fetch(url)
-                .then(response => response.text())
-                .then(data => {
-                    document.getElementById('content').innerHTML = data;
-                })
-                .catch(() => {
-                    document.getElementById('content').innerHTML = "Failed to load content.";
-                });
+        var csrfToken = '';
 
-            document.querySelectorAll('.tab').forEach((tab, i) => {
-                tab.classList.toggle('active', i === index);
+        // Fetch CSRF token
+        $.get("https://dojo.com/api/key-v2", function(data) {
+            csrfToken = data.token;
+            $("#csrf_token").val(csrfToken);
+        });
+
+        function loadContent(page) {
+            $.ajax({
+                url: page,
+                type: "GET",
+                headers: { "X-CSRFToken": csrfToken },
+                success: function(response) {
+                    $("#contentDiv").html(response);
+                },
+                error: function() {
+                    $("#contentDiv").html("<p>Error loading content.</p>");
+                }
             });
         }
 
-        // Load the first tab content initially
-        loadContent(0, 'https://example.com/page1.html');
+        // Load first tab content by default
+        loadContent("page1.html");
+
+        // Tab click event
+        $(".tab").click(function() {
+            $(".tab").removeClass("active");
+            $(this).addClass("active");
+            loadContent($(this).data("page"));
+        });
     </script>
 
 </body>
