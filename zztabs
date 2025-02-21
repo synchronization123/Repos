@@ -14,7 +14,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-        /* Ensure body takes full height and prevents scrolling issues */
+        /* Full height for body and flex container */
         body, html {
             margin: 0;
             padding: 0;
@@ -35,14 +35,13 @@
             overflow-y: auto;
         }
 
-        /* Content Area */
+        /* Content Area: Full width starting from sidebar */
         .content {
-            margin-left: 250px; /* Match sidebar width */
-            width: calc(100% - 250px); /* Prevent content from going behind sidebar */
+            flex-grow: 1; /* Takes full available space */
             padding: 20px;
             background: #f8f9fa;
             min-height: 100vh;
-            overflow-x: hidden;
+            margin-left: 250px; /* Start content after sidebar */
         }
     </style>
 </head>
@@ -54,7 +53,7 @@
     <!-- Main content area -->
     <div class="content">
         <h1>Dashboard</h1>
-        <p>Welcome to the dashboard! Your content will always be visible without overlapping the sidebar.</p>
+        <p>Welcome to the dashboard! Your content takes full width starting from the sidebar.</p>
     </div>
 
     <script>
